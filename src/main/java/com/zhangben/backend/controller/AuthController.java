@@ -24,12 +24,10 @@ public class AuthController {
     public ResponseEntity<?> login(@RequestBody LoginRequest req) {
 
         User user = userService.findByEmail(req.getEmail());
-        if (user == null) {
-            return ResponseEntity.status(401).body("用户不存在");
-        }
-
-        if (!userService.checkPassword(req.getPassword(), user.getPassword())) {
-            return ResponseEntity.status(401).body("密码错误");
+        
+        // 合并错误信息，防止暴力破解
+        if (user == null || !userService.checkPassword(req.getPassword(), user.getPassword())) {
+            return ResponseEntity.status(401).body("邮箱或密码错误");
         }
 
         // 根据 rememberMe 设置不同的过期时间
@@ -62,6 +60,11 @@ public class AuthController {
     @PostMapping("/register")
     public ResponseEntity<?> register(@RequestBody RegisterRequest req) {
 
+        // 验证密码长度
+        if (req.getPassword() == null || req.getPassword().length() < 8) {
+            return ResponseEntity.badRequest().body("密码至少8位");
+        }
+
         if (userService.findByEmail(req.getEmail()) != null) {
             return ResponseEntity.badRequest().body("邮箱已被注册");
         }
@@ -78,30 +81,36 @@ public class AuthController {
     public ResponseEntity<?> me() {
         StpUtil.checkLogin();
 
-        Integer userId = StpUtil.getLoginIdAsInt();
+        int userId = StpUtil.getLoginIdAsInt();
         User user = userService.findById(userId);
+        if (user == null) {
+            return ResponseEntity.status(404).body("用户不存在");
+        }
 
-        return ResponseEntity.ok(
-                new CurrentUserResponse(
-                        user.getId(),
-                        user.getEmail(),
-                        user.getNickname(),
-                        user.getRole()
-                )
-        );
-    }
+        CurrentUserResponse resp = new CurrentUserResponse();
+        resp.setId(user.getId());
+        resp.setEmail(user.getEmail());
+        resp.setNickname(user.getNickname());
+        resp.setRole(user.getRole());
+        resp.setFirstname(user.getFirstname());
+        resp.setSecondname(user.getSecondname());
+        resp.setPaypayFlag(user.getPaypayFlag());
+        resp.setBankFlag(user.getBankFlag());
 
-    // 只有 admin 能访问
-    @SaCheckRole("admin")
-    @GetMapping("/admin-only")
-    public ResponseEntity<?> adminOnly() {
-        return ResponseEntity.ok("仅管理员可见");
+        return ResponseEntity.ok(resp);
     }
 
     // 登出
     @PostMapping("/logout")
     public ResponseEntity<?> logout() {
         StpUtil.logout();
-        return ResponseEntity.ok("已退出登录");
+        return ResponseEntity.ok("已登出");
+    }
+
+    // 测试接口（仅管理员）
+    @SaCheckRole("admin")
+    @GetMapping("/admin/test")
+    public ResponseEntity<?> adminTest() {
+        return ResponseEntity.ok("欢迎管理员！你有 admin 权限");
     }
 }

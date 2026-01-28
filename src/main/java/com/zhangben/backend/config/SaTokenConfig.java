@@ -27,6 +27,9 @@ public class SaTokenConfig implements WebMvcConfigurer {
             SaRouter.match("/**")
                     // 登录、注册不拦截
                     .notMatch("/api/auth/login", "/api/auth/register")
+                    .notMatch("/api/auth/google/link-existing-account")
+                    // Google SSO 登录不拦截
+                    .notMatch("/api/auth/google/login")
 
                     // 静态资源不拦截
                     .notMatch("/static/**", "/public/**", "/resources/**", "/favicon.ico")
