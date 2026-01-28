@@ -153,8 +153,14 @@ public class DebtServiceImpl implements DebtService {
                     item.setAmount(o.getPerAmount());
                     item.setComment(o.getComment());
                     item.setPayDatetime(o.getPayDatetime());
-                    item.setCategoryName(payStyleMapper.selectByPrimaryKey(o.getStyleId()).getStyleName());
-                    item.setLocationText("POINT");
+                    
+                    if (o.getStyleId() != null) {
+                        PayStyle style = payStyleMapper.selectByPrimaryKey(o.getStyleId());
+                        item.setCategoryName(style != null ? style.getStyleName() : "未分类");
+                    } else {
+                        item.setCategoryName("未分类");
+                    }
+                    item.setLocationText("位置信息");
 
                     details.add(item);
                 }
@@ -171,7 +177,7 @@ public class DebtServiceImpl implements DebtService {
                     item.setComment(o.getComment());
                     item.setPayDatetime(o.getPayDatetime());
                     item.setCategoryName("还款");
-                    item.setLocationText("N/A");
+                    item.setLocationText("无");
 
                     details.add(item);
                 }
@@ -191,7 +197,8 @@ public class DebtServiceImpl implements DebtService {
         o.setTargetUserid(req.getCreditorId());
         o.setRepayFlag((byte) 2);
         o.setPerAmount(req.getAmount());
-        o.setStyleId(req.getStyleId());
+        // style_id 如果没有传，设置为0或者一个默认值
+        o.setStyleId(req.getStyleId() != null ? req.getStyleId() : 0);
         o.setComment(req.getComment());
         o.setDeletedFlag((byte) 0);
         o.setPayDatetime(LocalDateTime.now());
@@ -251,8 +258,14 @@ public class DebtServiceImpl implements DebtService {
                         d.setAmount(o.getPerAmount());
                         d.setComment(o.getComment());
                         d.setPayDatetime(o.getPayDatetime());
-                        d.setCategoryName(payStyleMapper.selectByPrimaryKey(o.getStyleId()).getStyleName());
-                        d.setLocationText("POINT");
+                        
+                        if (o.getStyleId() != null) {
+                            PayStyle style = payStyleMapper.selectByPrimaryKey(o.getStyleId());
+                            d.setCategoryName(style != null ? style.getStyleName() : "未分类");
+                        } else {
+                            d.setCategoryName("未分类");
+                        }
+                        d.setLocationText("位置信息");
 
                         details.add(d);
                     }
@@ -269,7 +282,103 @@ public class DebtServiceImpl implements DebtService {
                         d.setComment(o.getComment());
                         d.setPayDatetime(o.getPayDatetime());
                         d.setCategoryName("还款");
-                        d.setLocationText("N/A");
+                        d.setLocationText("无");
+
+                        details.add(d);
+                    }
+                }
+            }
+
+            item.setDetails(details);
+            list.add(item);
+        }
+
+        return list;
+    }
+
+    @Override
+    public List<MyDebtOverviewItem> getMyDebtOverview(Integer userId) {
+
+        Map<String, Long> map = buildDebtMap();
+
+        // 找出我欠钱的所有债权人
+        Map<Integer, Long> creditorMap = new HashMap<>();
+
+        for (Map.Entry<String, Long> e : map.entrySet()) {
+
+            String[] parts = e.getKey().split("-");
+            Integer debtor = Integer.valueOf(parts[0]);
+            Integer creditor = Integer.valueOf(parts[1]);
+            Long amount = e.getValue();
+
+            // 我是欠款人，且金额大于0
+            if (amount > 0 && debtor.equals(userId)) {
+                creditorMap.put(creditor, creditorMap.getOrDefault(creditor, 0L) + amount);
+            }
+        }
+
+        List<MyDebtOverviewItem> list = new ArrayList<>();
+
+        List<Outcome> all = loadAllOutcomes();
+
+        for (Map.Entry<Integer, Long> e : creditorMap.entrySet()) {
+
+            Integer creditorId = e.getKey();
+            Long totalAmount = e.getValue();
+
+            User creditor = userMapper.selectByPrimaryKey(creditorId);
+
+            MyDebtOverviewItem item = new MyDebtOverviewItem();
+            item.setCreditorId(creditorId);
+            item.setCreditorName(creditor.getNickname());
+            item.setTotalAmount(totalAmount);
+            
+            // 添加债权人支持的收款方式
+            item.setPaypaySupported(creditor.getPaypayFlag() != null && creditor.getPaypayFlag() == 1);
+            item.setBankSupported(creditor.getBankFlag() != null && creditor.getBankFlag() == 1);
+
+            List<CreditorDebtDetailItem> details = new ArrayList<>();
+
+            for (Outcome o : all) {
+
+                // 消费明细 - 债权人付款，我是参与者
+                if (o.getRepayFlag() == (byte) 1) {
+
+                    List<OutcomeParticipant> ps = loadParticipants(o.getId());
+                    boolean involved = ps.stream().anyMatch(p -> p.getUserId().equals(userId));
+
+                    if (involved && o.getPayerUserid().equals(creditorId)) {
+
+                        CreditorDebtDetailItem d = new CreditorDebtDetailItem();
+                        d.setOutcomeId(o.getId());
+                        d.setAmount(o.getPerAmount());
+                        d.setComment(o.getComment());
+                        d.setPayDatetime(o.getPayDatetime());
+                        
+                        if (o.getStyleId() != null) {
+                            PayStyle style = payStyleMapper.selectByPrimaryKey(o.getStyleId());
+                            d.setCategoryName(style != null ? style.getStyleName() : "未分类");
+                        } else {
+                            d.setCategoryName("未分类");
+                        }
+                        d.setLocationText("位置信息");
+
+                        details.add(d);
+                    }
+                }
+
+                // 还款明细 - 我还给债权人
+                if (o.getRepayFlag() == (byte) 2) {
+
+                    if (o.getPayerUserid().equals(userId) && o.getTargetUserid().equals(creditorId)) {
+
+                        CreditorDebtDetailItem d = new CreditorDebtDetailItem();
+                        d.setOutcomeId(o.getId());
+                        d.setAmount(-o.getAmount());
+                        d.setComment(o.getComment());
+                        d.setPayDatetime(o.getPayDatetime());
+                        d.setCategoryName("还款");
+                        d.setLocationText("无");
 
                         details.add(d);
                     }

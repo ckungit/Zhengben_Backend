@@ -1,0 +1,37 @@
+<!-- ============================================
+     在 pom.xml 中添加以下内容
+     ============================================ -->
+
+<!-- 1. 在 </dependencies> 之后、<build> 之前添加 profiles -->
+<profiles>
+    <!-- 开发环境（默认） -->
+    <profile>
+        <id>dev</id>
+        <properties>
+            <spring.profiles.active>dev</spring.profiles.active>
+        </properties>
+        <activation>
+            <activeByDefault>true</activeByDefault>
+        </activation>
+    </profile>
+    
+    <!-- 生产环境 -->
+    <profile>
+        <id>prod</id>
+        <properties>
+            <spring.profiles.active>prod</spring.profiles.active>
+        </properties>
+    </profile>
+</profiles>
+
+<!-- 2. 在 <build> 里添加 resources 配置（如果已有则合并） -->
+<build>
+    <resources>
+        <resource>
+            <directory>src/main/resources</directory>
+            <filtering>true</filtering>
+        </resource>
+    </resources>
+    
+    <!-- 你现有的其他配置保持不变... -->
+</build>

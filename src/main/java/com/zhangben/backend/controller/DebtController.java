@@ -50,11 +50,11 @@ public class DebtController {
     public String repay(@RequestBody RepayRequest req) {
         Integer userId = StpUtil.getLoginIdAsInt();
         debtService.repay(req, userId);
-        return "Repay recorded";
+        return "还款记录成功";
     }
 
     /**
-     * 4. 自身债权一览
+     * 4. 自身债权一览（别人欠我的钱）
      *    - 列出所有欠我钱的人
      *    - 每个人的欠款总额
      *    - 欠款明细（分类、备注、金额、时间、地点）
@@ -63,5 +63,17 @@ public class DebtController {
     public List<MyCreditOverviewItem> getMyCredit() {
         Integer userId = StpUtil.getLoginIdAsInt();
         return debtService.getMyCreditOverview(userId);
+    }
+
+    /**
+     * 5. 自身欠款一览（我欠别人的钱）
+     *    - 列出我欠钱的所有人
+     *    - 每个人的欠款总额
+     *    - 欠款明细
+     */
+    @GetMapping("/my-debt")
+    public List<MyDebtOverviewItem> getMyDebt() {
+        Integer userId = StpUtil.getLoginIdAsInt();
+        return debtService.getMyDebtOverview(userId);
     }
 }

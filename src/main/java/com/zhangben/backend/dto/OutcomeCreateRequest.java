@@ -8,11 +8,14 @@ public class OutcomeCreateRequest {
     // 总金额（必填）
     private Long amount;
 
-    // 参与者ID列表（必填，至少一个）
+    // 参与者ID列表（注册用户）
     private List<Integer> targetUserIds;
 
     // 是否包含本人（payer）
     private Boolean includeSelf;
+
+    // 额外参与人数（未注册用户）
+    private Integer extraParticipants;
 
     // 1 = 支付款项，2 = 还钱记录
     private Byte repayFlag;
@@ -30,77 +33,83 @@ public class OutcomeCreateRequest {
     // 支付时间（可选，不传则用当前时间）
     private LocalDateTime payDatetime;
 
-	public Long getAmount() {
-		return amount;
-	}
+    public Long getAmount() {
+        return amount;
+    }
 
-	public void setAmount(Long amount) {
-		this.amount = amount;
-	}
+    public void setAmount(Long amount) {
+        this.amount = amount;
+    }
 
-	public List<Integer> getTargetUserIds() {
-		return targetUserIds;
-	}
+    public List<Integer> getTargetUserIds() {
+        return targetUserIds;
+    }
 
-	public void setTargetUserIds(List<Integer> targetUserIds) {
-		this.targetUserIds = targetUserIds;
-	}
+    public void setTargetUserIds(List<Integer> targetUserIds) {
+        this.targetUserIds = targetUserIds;
+    }
 
-	public Boolean getIncludeSelf() {
-		return includeSelf;
-	}
+    public Boolean getIncludeSelf() {
+        return includeSelf;
+    }
 
-	public void setIncludeSelf(Boolean includeSelf) {
-		this.includeSelf = includeSelf;
-	}
+    public void setIncludeSelf(Boolean includeSelf) {
+        this.includeSelf = includeSelf;
+    }
 
-	public Byte getRepayFlag() {
-		return repayFlag;
-	}
+    public Integer getExtraParticipants() {
+        return extraParticipants;
+    }
 
-	public void setRepayFlag(Byte repayFlag) {
-		this.repayFlag = repayFlag;
-	}
+    public void setExtraParticipants(Integer extraParticipants) {
+        this.extraParticipants = extraParticipants;
+    }
 
-	public Integer getStyleId() {
-		return styleId;
-	}
+    public Byte getRepayFlag() {
+        return repayFlag;
+    }
 
-	public void setStyleId(Integer styleId) {
-		this.styleId = styleId;
-	}
+    public void setRepayFlag(Byte repayFlag) {
+        this.repayFlag = repayFlag;
+    }
 
-	public String getComment() {
-		return comment;
-	}
+    public Integer getStyleId() {
+        return styleId;
+    }
 
-	public void setComment(String comment) {
-		this.comment = comment;
-	}
+    public void setStyleId(Integer styleId) {
+        this.styleId = styleId;
+    }
 
-	public Double getLatitude() {
-		return latitude;
-	}
+    public String getComment() {
+        return comment;
+    }
 
-	public void setLatitude(Double latitude) {
-		this.latitude = latitude;
-	}
+    public void setComment(String comment) {
+        this.comment = comment;
+    }
 
-	public Double getLongitude() {
-		return longitude;
-	}
+    public Double getLatitude() {
+        return latitude;
+    }
 
-	public void setLongitude(Double longitude) {
-		this.longitude = longitude;
-	}
+    public void setLatitude(Double latitude) {
+        this.latitude = latitude;
+    }
 
-	public LocalDateTime getPayDatetime() {
-		return payDatetime;
-	}
+    public Double getLongitude() {
+        return longitude;
+    }
 
-	public void setPayDatetime(LocalDateTime payDatetime) {
-		this.payDatetime = payDatetime;
-	}
+    public void setLongitude(Double longitude) {
+        this.longitude = longitude;
+    }
 
-	
+    public LocalDateTime getPayDatetime() {
+        return payDatetime;
+    }
+
+    public void setPayDatetime(LocalDateTime payDatetime) {
+        this.payDatetime = payDatetime;
+    }
 }
