@@ -47,9 +47,9 @@ public class DebtServiceImpl implements DebtService {
     }
 
     /**
-     * 构建 debtor-creditor 的净欠款表
+     * 构建 debtor-creditor 的原始欠款表（不含净额计算）
      */
-    private Map<String, Long> buildDebtMap() {
+    private Map<String, Long> buildRawDebtMap() {
 
         Map<String, Long> map = new HashMap<>();
 
@@ -70,8 +70,12 @@ public class DebtServiceImpl implements DebtService {
                         continue;
                     }
 
+                    // V18: 使用份额计算欠款金额
+                    Integer shares = p.getShares() != null ? p.getShares() : 1;
+                    long debtAmount = o.getPerAmount() * shares;
+
                     String key = uid + "-" + o.getPayerUserid();
-                    map.put(key, map.getOrDefault(key, 0L) + o.getPerAmount());
+                    map.put(key, map.getOrDefault(key, 0L) + debtAmount);
                 }
             }
 
@@ -87,6 +91,56 @@ public class DebtServiceImpl implements DebtService {
         }
 
         return map;
+    }
+
+    /**
+     * V19: 构建净额欠款表
+     * 当A欠B 300元，B欠A 200元时，计算净额：A欠B 100元
+     */
+    private Map<String, Long> buildDebtMap() {
+
+        Map<String, Long> rawMap = buildRawDebtMap();
+        Map<String, Long> netMap = new HashMap<>();
+
+        // 记录已处理过的用户对
+        Set<String> processed = new HashSet<>();
+
+        for (Map.Entry<String, Long> e : rawMap.entrySet()) {
+
+            String[] parts = e.getKey().split("-");
+            Integer userA = Integer.valueOf(parts[0]);
+            Integer userB = Integer.valueOf(parts[1]);
+
+            // 创建规范化的用户对标识（小ID在前）
+            String pairKey = userA < userB ? userA + ":" + userB : userB + ":" + userA;
+
+            if (processed.contains(pairKey)) {
+                continue;
+            }
+            processed.add(pairKey);
+
+            // A欠B的金额
+            String keyAB = userA + "-" + userB;
+            Long amountAB = rawMap.getOrDefault(keyAB, 0L);
+
+            // B欠A的金额
+            String keyBA = userB + "-" + userA;
+            Long amountBA = rawMap.getOrDefault(keyBA, 0L);
+
+            // 计算净额
+            long net = amountAB - amountBA;
+
+            if (net > 0) {
+                // A欠B净额
+                netMap.put(keyAB, net);
+            } else if (net < 0) {
+                // B欠A净额
+                netMap.put(keyBA, -net);
+            }
+            // net == 0 表示两清，不记录
+        }
+
+        return netMap;
     }
 
     @Override
@@ -123,10 +177,11 @@ public class DebtServiceImpl implements DebtService {
     @Override
     public CreditorDebtOverviewResponse getDebtByCreditor(Integer userId, Integer creditorId) {
 
-        Map<String, Long> map = buildDebtMap();
+        Map<String, Long> netMap = buildDebtMap();
+        Map<String, Long> rawMap = buildRawDebtMap();
 
         String key = userId + "-" + creditorId;
-        Long total = map.getOrDefault(key, 0L);
+        Long total = netMap.getOrDefault(key, 0L);
 
         CreditorDebtOverviewResponse resp = new CreditorDebtOverviewResponse();
         resp.setCreditorId(creditorId);
@@ -144,16 +199,23 @@ public class DebtServiceImpl implements DebtService {
             if (o.getRepayFlag() == (byte) 1) {
 
                 List<OutcomeParticipant> ps = loadParticipants(o.getId());
-                boolean involved = ps.stream().anyMatch(p -> p.getUserId().equals(userId));
+                Optional<OutcomeParticipant> participantOpt = ps.stream()
+                    .filter(p -> p.getUserId().equals(userId))
+                    .findFirst();
 
-                if (involved && o.getPayerUserid().equals(creditorId)) {
+                if (participantOpt.isPresent() && o.getPayerUserid().equals(creditorId)) {
+
+                    // V18: 使用份额计算金额
+                    OutcomeParticipant participant = participantOpt.get();
+                    Integer shares = participant.getShares() != null ? participant.getShares() : 1;
+                    long debtAmount = o.getPerAmount() * shares;
 
                     CreditorDebtDetailItem item = new CreditorDebtDetailItem();
                     item.setOutcomeId(o.getId());
-                    item.setAmount(o.getPerAmount());
+                    item.setAmount(debtAmount);
                     item.setComment(o.getComment());
                     item.setPayDatetime(o.getPayDatetime());
-                    
+
                     if (o.getStyleId() != null) {
                         PayStyle style = payStyleMapper.selectByPrimaryKey(o.getStyleId());
                         item.setCategoryName(style != null ? style.getStyleName() : "未分类");
@@ -184,6 +246,20 @@ public class DebtServiceImpl implements DebtService {
             }
         }
 
+        // V19: 如果有互相欠款，添加抵消记录
+        String reverseKey = creditorId + "-" + userId; // 对方欠我的金额
+        Long theyOweMeRaw = rawMap.getOrDefault(reverseKey, 0L);
+        if (theyOweMeRaw > 0) {
+            CreditorDebtDetailItem offsetItem = new CreditorDebtDetailItem();
+            offsetItem.setOutcomeId(-1);
+            offsetItem.setAmount(-theyOweMeRaw);
+            offsetItem.setComment("互相欠款抵消（Ta欠我的部分）");
+            offsetItem.setPayDatetime(java.time.LocalDateTime.now());
+            offsetItem.setCategoryName("抵消");
+            offsetItem.setLocationText("无");
+            details.add(offsetItem);
+        }
+
         resp.setDetails(details);
         return resp;
     }
@@ -201,7 +277,10 @@ public class DebtServiceImpl implements DebtService {
         o.setStyleId(req.getStyleId() != null ? req.getStyleId() : 0);
         o.setComment(req.getComment());
         o.setDeletedFlag((byte) 0);
-        o.setPayDatetime(LocalDateTime.now());
+
+        // V20: 支持自定义还款时间
+        LocalDateTime payTime = req.getPayDatetime() != null ? req.getPayDatetime() : LocalDateTime.now();
+        o.setPayDatetime(payTime);
 
         outcomeMapper.insertSelective(o);
     }
@@ -209,11 +288,12 @@ public class DebtServiceImpl implements DebtService {
     @Override
     public List<MyCreditOverviewItem> getMyCreditOverview(Integer userId) {
 
-        Map<String, Long> map = buildDebtMap();
+        Map<String, Long> netMap = buildDebtMap();
+        Map<String, Long> rawMap = buildRawDebtMap();
 
         Map<Integer, Long> debtorMap = new HashMap<>();
 
-        for (Map.Entry<String, Long> e : map.entrySet()) {
+        for (Map.Entry<String, Long> e : netMap.entrySet()) {
 
             String[] parts = e.getKey().split("-");
             Integer debtor = Integer.valueOf(parts[0]);
@@ -245,20 +325,27 @@ public class DebtServiceImpl implements DebtService {
 
             for (Outcome o : all) {
 
-                // 消费明细
+                // 消费明细 - 我付款，对方参与
                 if (o.getRepayFlag() == (byte) 1) {
 
                     List<OutcomeParticipant> ps = loadParticipants(o.getId());
-                    boolean involved = ps.stream().anyMatch(p -> p.getUserId().equals(debtorId));
+                    Optional<OutcomeParticipant> participantOpt = ps.stream()
+                        .filter(p -> p.getUserId().equals(debtorId))
+                        .findFirst();
 
-                    if (involved && o.getPayerUserid().equals(userId)) {
+                    if (participantOpt.isPresent() && o.getPayerUserid().equals(userId)) {
+
+                        // V18: 使用份额计算金额
+                        OutcomeParticipant participant = participantOpt.get();
+                        Integer shares = participant.getShares() != null ? participant.getShares() : 1;
+                        long debtAmount = o.getPerAmount() * shares;
 
                         DebtorDebtDetailItem d = new DebtorDebtDetailItem();
                         d.setOutcomeId(o.getId());
-                        d.setAmount(o.getPerAmount());
+                        d.setAmount(debtAmount);
                         d.setComment(o.getComment());
                         d.setPayDatetime(o.getPayDatetime());
-                        
+
                         if (o.getStyleId() != null) {
                             PayStyle style = payStyleMapper.selectByPrimaryKey(o.getStyleId());
                             d.setCategoryName(style != null ? style.getStyleName() : "未分类");
@@ -271,7 +358,7 @@ public class DebtServiceImpl implements DebtService {
                     }
                 }
 
-                // 还款明细
+                // 还款明细 - 对方还给我
                 if (o.getRepayFlag() == (byte) 2) {
 
                     if (o.getPayerUserid().equals(debtorId) && o.getTargetUserid().equals(userId)) {
@@ -289,6 +376,20 @@ public class DebtServiceImpl implements DebtService {
                 }
             }
 
+            // V19: 如果有互相欠款，添加抵消记录
+            String reverseKey = userId + "-" + debtorId; // 我欠对方的金额
+            Long iOweThemRaw = rawMap.getOrDefault(reverseKey, 0L);
+            if (iOweThemRaw > 0) {
+                DebtorDebtDetailItem offsetItem = new DebtorDebtDetailItem();
+                offsetItem.setOutcomeId(-1); // 特殊ID表示虚拟记录
+                offsetItem.setAmount(-iOweThemRaw);
+                offsetItem.setComment("互相欠款抵消（我欠Ta的部分）");
+                offsetItem.setPayDatetime(java.time.LocalDateTime.now());
+                offsetItem.setCategoryName("抵消");
+                offsetItem.setLocationText("无");
+                details.add(offsetItem);
+            }
+
             item.setDetails(details);
             list.add(item);
         }
@@ -299,12 +400,13 @@ public class DebtServiceImpl implements DebtService {
     @Override
     public List<MyDebtOverviewItem> getMyDebtOverview(Integer userId) {
 
-        Map<String, Long> map = buildDebtMap();
+        Map<String, Long> netMap = buildDebtMap();
+        Map<String, Long> rawMap = buildRawDebtMap();
 
-        // 找出我欠钱的所有债权人
+        // 找出我欠钱的所有债权人（使用净额）
         Map<Integer, Long> creditorMap = new HashMap<>();
 
-        for (Map.Entry<String, Long> e : map.entrySet()) {
+        for (Map.Entry<String, Long> e : netMap.entrySet()) {
 
             String[] parts = e.getKey().split("-");
             Integer debtor = Integer.valueOf(parts[0]);
@@ -332,7 +434,7 @@ public class DebtServiceImpl implements DebtService {
             item.setCreditorId(creditorId);
             item.setCreditorName(creditor.getNickname());
             item.setTotalAmount(totalAmount);
-            
+
             // 添加债权人支持的收款方式
             item.setPaypaySupported(creditor.getPaypayFlag() != null && creditor.getPaypayFlag() == 1);
             item.setBankSupported(creditor.getBankFlag() != null && creditor.getBankFlag() == 1);
@@ -345,16 +447,23 @@ public class DebtServiceImpl implements DebtService {
                 if (o.getRepayFlag() == (byte) 1) {
 
                     List<OutcomeParticipant> ps = loadParticipants(o.getId());
-                    boolean involved = ps.stream().anyMatch(p -> p.getUserId().equals(userId));
+                    Optional<OutcomeParticipant> participantOpt = ps.stream()
+                        .filter(p -> p.getUserId().equals(userId))
+                        .findFirst();
 
-                    if (involved && o.getPayerUserid().equals(creditorId)) {
+                    if (participantOpt.isPresent() && o.getPayerUserid().equals(creditorId)) {
+
+                        // V18: 使用份额计算金额
+                        OutcomeParticipant participant = participantOpt.get();
+                        Integer shares = participant.getShares() != null ? participant.getShares() : 1;
+                        long debtAmount = o.getPerAmount() * shares;
 
                         CreditorDebtDetailItem d = new CreditorDebtDetailItem();
                         d.setOutcomeId(o.getId());
-                        d.setAmount(o.getPerAmount());
+                        d.setAmount(debtAmount);
                         d.setComment(o.getComment());
                         d.setPayDatetime(o.getPayDatetime());
-                        
+
                         if (o.getStyleId() != null) {
                             PayStyle style = payStyleMapper.selectByPrimaryKey(o.getStyleId());
                             d.setCategoryName(style != null ? style.getStyleName() : "未分类");
@@ -383,6 +492,20 @@ public class DebtServiceImpl implements DebtService {
                         details.add(d);
                     }
                 }
+            }
+
+            // V19: 如果有互相欠款，添加抵消记录
+            String reverseKey = creditorId + "-" + userId; // 对方欠我的金额
+            Long theyOweMeRaw = rawMap.getOrDefault(reverseKey, 0L);
+            if (theyOweMeRaw > 0) {
+                CreditorDebtDetailItem offsetItem = new CreditorDebtDetailItem();
+                offsetItem.setOutcomeId(-1); // 特殊ID表示虚拟记录
+                offsetItem.setAmount(-theyOweMeRaw);
+                offsetItem.setComment("互相欠款抵消（Ta欠我的部分）");
+                offsetItem.setPayDatetime(java.time.LocalDateTime.now());
+                offsetItem.setCategoryName("抵消");
+                offsetItem.setLocationText("无");
+                details.add(offsetItem);
             }
 
             item.setDetails(details);

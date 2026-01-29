@@ -2,6 +2,7 @@ package com.zhangben.backend.dto;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 public class OutcomeCreateRequest {
 
@@ -11,11 +12,21 @@ public class OutcomeCreateRequest {
     // 参与者ID列表（注册用户）
     private List<Integer> targetUserIds;
 
+    // 参与者份额映射 userId -> shares（V18新增：自定义份额功能）
+    // 如果不提供，默认每人1份；如果提供，会覆盖默认值
+    private Map<Integer, Integer> participantShares;
+
     // 是否包含本人（payer）
     private Boolean includeSelf;
 
+    // 本人的份额数（V18新增：自定义份额功能，默认1）
+    private Integer selfShares;
+
     // 额外参与人数（未注册用户）
     private Integer extraParticipants;
+
+    // 额外参与者的总份额数（V18新增：自定义份额功能，默认等于extraParticipants）
+    private Integer extraShares;
 
     // 1 = 支付款项，2 = 还钱记录
     private Byte repayFlag;
@@ -111,5 +122,29 @@ public class OutcomeCreateRequest {
 
     public void setPayDatetime(LocalDateTime payDatetime) {
         this.payDatetime = payDatetime;
+    }
+
+    public Map<Integer, Integer> getParticipantShares() {
+        return participantShares;
+    }
+
+    public void setParticipantShares(Map<Integer, Integer> participantShares) {
+        this.participantShares = participantShares;
+    }
+
+    public Integer getSelfShares() {
+        return selfShares;
+    }
+
+    public void setSelfShares(Integer selfShares) {
+        this.selfShares = selfShares;
+    }
+
+    public Integer getExtraShares() {
+        return extraShares;
+    }
+
+    public void setExtraShares(Integer extraShares) {
+        this.extraShares = extraShares;
     }
 }

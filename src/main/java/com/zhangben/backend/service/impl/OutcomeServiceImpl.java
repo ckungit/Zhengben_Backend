@@ -47,30 +47,49 @@ public class OutcomeServiceImpl implements OutcomeService {
         // 当前登录用户 = 支付者
         Integer payerId = StpUtil.getLoginIdAsInt();
 
-        // 1. 计算参与人数（注册用户 + 自己 + 额外人数）
-        int registeredCount = (req.getTargetUserIds() != null) ? req.getTargetUserIds().size() : 0;
-        int extraCount = (req.getExtraParticipants() != null) ? req.getExtraParticipants() : 0;
-        int selfCount = Boolean.TRUE.equals(req.getIncludeSelf()) ? 1 : 0;
-        int totalCount = registeredCount + extraCount + selfCount;
+        // V18: 自定义份额功能
+        // 获取参与者份额映射（如果没有提供，每人默认1份）
+        java.util.Map<Integer, Integer> sharesMap = req.getParticipantShares();
 
-        if (totalCount <= 0) {
-            throw new IllegalArgumentException("至少需要一个参与者");
+        // 计算各类份额
+        int selfShares = Boolean.TRUE.equals(req.getIncludeSelf())
+            ? (req.getSelfShares() != null ? req.getSelfShares() : 1)
+            : 0;
+
+        int extraCount = (req.getExtraParticipants() != null) ? req.getExtraParticipants() : 0;
+        int extraShares = (req.getExtraShares() != null) ? req.getExtraShares() : extraCount;
+
+        // 计算注册用户的总份额
+        int registeredShares = 0;
+        if (req.getTargetUserIds() != null) {
+            for (Integer uid : req.getTargetUserIds()) {
+                int shares = (sharesMap != null && sharesMap.containsKey(uid)) ? sharesMap.get(uid) : 1;
+                registeredShares += shares;
+            }
         }
 
-        // 2. 计算 per_amount（向上取整）
-        long perAmount = (long) Math.ceil((double) req.getAmount() / totalCount);
+        // 总份额数
+        int totalShares = selfShares + registeredShares + extraShares;
 
-        // 3. 写入 outcome 表
+        if (totalShares <= 0) {
+            throw new IllegalArgumentException("总份额数必须大于0");
+        }
+
+        // 计算 per_amount（每份金额，向上取整）
+        long perAmount = (long) Math.ceil((double) req.getAmount() / totalShares);
+
+        // 写入 outcome 表
         Outcome outcome = new Outcome();
         outcome.setAmount(req.getAmount());
         outcome.setPayerUserid(payerId);
         outcome.setTargetUserid(0); // 多人场景下不使用此字段
         outcome.setRepayFlag(req.getRepayFlag());
         outcome.setPerAmount(perAmount);
+        outcome.setTotalShares(totalShares); // V18: 保存总份额数
         outcome.setStyleId(req.getStyleId());
         outcome.setComment(req.getComment());
         outcome.setDeletedFlag((byte) 0);
-        outcome.setExtraParticipants(extraCount); // 保存额外参与人数
+        outcome.setExtraParticipants(extraCount);
 
         LocalDateTime payTime = req.getPayDatetime() != null ? req.getPayDatetime() : LocalDateTime.now();
         outcome.setPayDatetime(payTime);
@@ -83,21 +102,24 @@ public class OutcomeServiceImpl implements OutcomeService {
 
         outcomeMapper.insertSelective(outcome);
 
-        // 4. 写入参与者 outcome_participant（仅注册用户）
+        // 写入参与者 outcome_participant（仅注册用户，包含份额）
         if (req.getTargetUserIds() != null) {
             for (Integer uid : req.getTargetUserIds()) {
+                int shares = (sharesMap != null && sharesMap.containsKey(uid)) ? sharesMap.get(uid) : 1;
                 OutcomeParticipant ep = new OutcomeParticipant();
                 ep.setOutcomeId(outcome.getId());
                 ep.setUserId(uid);
+                ep.setShares(shares); // V18: 保存份额
                 outcomeParticipantMapper.insertSelective(ep);
             }
         }
 
-        // 5. includeSelf = true → 把 payer 也加入参与者
+        // includeSelf = true → 把 payer 也加入参与者
         if (Boolean.TRUE.equals(req.getIncludeSelf())) {
             OutcomeParticipant ep = new OutcomeParticipant();
             ep.setOutcomeId(outcome.getId());
             ep.setUserId(payerId);
+            ep.setShares(selfShares); // V18: 保存自己的份额
             outcomeParticipantMapper.insertSelective(ep);
         }
     }
