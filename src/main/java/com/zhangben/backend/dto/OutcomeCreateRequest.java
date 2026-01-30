@@ -44,6 +44,9 @@ public class OutcomeCreateRequest {
     // 支付时间（可选，不传则用当前时间）
     private LocalDateTime payDatetime;
 
+    // 关联的活动ID（可选）
+    private Integer activityId;
+
     public Long getAmount() {
         return amount;
     }
@@ -146,5 +149,13 @@ public class OutcomeCreateRequest {
 
     public void setExtraShares(Integer extraShares) {
         this.extraShares = extraShares;
+    }
+
+    public Integer getActivityId() {
+        return activityId;
+    }
+
+    public void setActivityId(Integer activityId) {
+        this.activityId = activityId;
     }
 }

@@ -13,10 +13,10 @@ mybatis.type-aliases-package=com.zhangben.backend.model
 spring.jackson.time-zone=Asia/Tokyo
 spring.jpa.properties.hibernate.jdbc.time_zone=Asia/Tokyo
 
-# V14-V17: åºç¨éç½®
+# V14-V17: 应用配置
 app.base-url=${APP_BASE_URL:https://www.aabillpay.com}
 
-# V15: é®ä»¶æå¡éç½® (Brevo)
-brevo.api-key=${BREVO_API_KEY:}
+# V15: 邮件服务配置 (Brevo)
+brevo.api-key=${BREVO_API_KEY}
 brevo.sender-email=noreply@aabillpay.com
-brevo.sender-name=Payå
+brevo.sender-name=Pay友

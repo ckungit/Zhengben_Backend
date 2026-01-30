@@ -40,6 +40,11 @@ public class PasswordResetController {
             throw new RuntimeException("请输入邮箱");
         }
 
+        // 检查邮件服务是否可用
+        if (!emailService.isAvailable()) {
+            throw new RuntimeException("邮件服务暂不可用，请稍后重试或联系管理员");
+        }
+
         email = email.trim().toLowerCase();
 
         // 查找用户
@@ -62,11 +67,11 @@ public class PasswordResetController {
 
         // 生成新的重置token
         String token = generateToken();
-        
+
         PasswordResetToken resetToken = new PasswordResetToken();
         resetToken.setUserId(user.getId());
         resetToken.setToken(token);
-        
+
         // 1小时后过期
         Calendar cal = Calendar.getInstance();
         cal.add(Calendar.HOUR, 1);
@@ -75,7 +80,12 @@ public class PasswordResetController {
         tokenMapper.insert(resetToken);
 
         // 发送邮件
-        emailService.sendPasswordResetEmail(user.getEmail(), user.getNickname(), token);
+        boolean sent = emailService.sendPasswordResetEmail(user.getEmail(), user.getNickname(), token);
+        if (!sent) {
+            // 邮件发送失败，删除token
+            tokenMapper.markAsUsed(resetToken.getId());
+            throw new RuntimeException("邮件发送失败，请稍后重试");
+        }
 
         return result;
     }

@@ -1,18 +1,46 @@
 package com.zhangben.backend.service;
 
+import com.zhangben.backend.mapper.EmailTemplateMapper;
+import com.zhangben.backend.model.EmailTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.*;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
+import sendinblue.ApiClient;
+import sendinblue.Configuration;
+import sendinblue.auth.ApiKeyAuth;
+import sibApi.TransactionalEmailsApi;
+import sibModel.SendSmtpEmail;
+import sibModel.SendSmtpEmailSender;
+import sibModel.SendSmtpEmailTo;
 
+import jakarta.annotation.PostConstruct;
+import java.time.Year;
 import java.util.*;
 
+/**
+ * 邮件服务 - 使用 Brevo SDK 发送邮件
+ * 模板使用 EmailTemplateService 渲染
+ */
 @Service
 public class EmailService {
 
     private static final Logger logger = LoggerFactory.getLogger(EmailService.class);
+
+    // 模板代码常量
+    public static final String TEMPLATE_PASSWORD_RESET = "PASSWORD_RESET";
+    public static final String TEMPLATE_WELCOME = "WELCOME";
+    public static final String TEMPLATE_BILL_NOTIFICATION = "BILL_NOTIFICATION";
+
+    // 默认语言
+    public static final String DEFAULT_LANGUAGE = "zh-CN";
+
+    @Autowired
+    private EmailTemplateMapper emailTemplateMapper;
+
+    @Autowired
+    private EmailTemplateService templateService;
 
     @Value("${brevo.api-key:}")
     private String brevoApiKey;
@@ -26,7 +54,26 @@ public class EmailService {
     @Value("${app.base-url:https://www.aabillpay.com}")
     private String baseUrl;
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    private TransactionalEmailsApi emailApi;
+    private boolean initialized = false;
+
+    @PostConstruct
+    public void init() {
+        if (brevoApiKey != null && !brevoApiKey.isEmpty() && !"no_use_email".equals(brevoApiKey)) {
+            try {
+                ApiClient defaultClient = Configuration.getDefaultApiClient();
+                ApiKeyAuth apiKey = (ApiKeyAuth) defaultClient.getAuthentication("api-key");
+                apiKey.setApiKey(brevoApiKey);
+                emailApi = new TransactionalEmailsApi();
+                initialized = true;
+                logger.info("Brevo 邮件服务初始化成功");
+            } catch (Exception e) {
+                logger.error("Brevo 邮件服务初始化失败: {}", e.getMessage());
+            }
+        } else {
+            logger.warn("Brevo API Key 未配置，邮件服务不可用");
+        }
+    }
 
     /**
      * 发送密码重置邮件
@@ -34,122 +81,149 @@ public class EmailService {
     public boolean sendPasswordResetEmail(String toEmail, String toName, String resetToken) {
         String resetLink = baseUrl + "/reset-password?token=" + resetToken;
 
-        String subject = "【Pay友】密码重置";
-        String htmlContent = buildPasswordResetHtml(toName, resetLink);
+        Map<String, Object> variables = new HashMap<>();
+        variables.put("USER_NAME", toName != null ? toName : "用户");
+        variables.put("RESET_LINK", resetLink);
+        variables.put("EXPIRE_HOURS", "1");
+        variables.put("APP_NAME", senderName);
+        variables.put("YEAR", String.valueOf(Year.now().getValue()));
+
+        return sendEmailWithTemplate(toEmail, toName, TEMPLATE_PASSWORD_RESET, DEFAULT_LANGUAGE, variables);
+    }
+
+    /**
+     * 发送欢迎邮件
+     */
+    public boolean sendWelcomeEmail(String toEmail, String toName) {
+        Map<String, Object> variables = new HashMap<>();
+        variables.put("USER_NAME", toName != null ? toName : "新用户");
+        variables.put("LOGIN_LINK", baseUrl + "/login");
+        variables.put("APP_NAME", senderName);
+        variables.put("YEAR", String.valueOf(Year.now().getValue()));
+
+        return sendEmailWithTemplate(toEmail, toName, TEMPLATE_WELCOME, DEFAULT_LANGUAGE, variables);
+    }
+
+    /**
+     * 发送账单通知邮件（异步，失败不影响业务）
+     * @param toEmail 收件人邮箱
+     * @param toName 收件人昵称
+     * @param language 用户首选语言
+     * @param creatorName 账单创建者昵称
+     * @param amount 金额（分）
+     * @param perAmount 人均金额（分）
+     * @param comment 备注
+     * @param styleName 分类名称
+     * @param activityName 活动名称（可选）
+     * @param isUpdate 是否是更新通知
+     */
+    public void sendBillNotificationAsync(String toEmail, String toName, String language,
+                                          String creatorName, Long amount, Long perAmount,
+                                          String comment, String styleName, String activityName,
+                                          boolean isUpdate) {
+        // 异步发送，失败不影响业务
+        new Thread(() -> {
+            try {
+                String lang = language != null ? language : DEFAULT_LANGUAGE;
+
+                Map<String, Object> variables = new HashMap<>();
+                variables.put("recipientName", toName != null ? toName : "用户");
+                variables.put("creatorName", creatorName != null ? creatorName : "某用户");
+                variables.put("amount", String.format("%.2f", amount / 100.0));
+                variables.put("perAmount", String.format("%.2f", perAmount / 100.0));
+                variables.put("styleName", styleName != null ? styleName : "未分类");
+                variables.put("comment", comment);
+                variables.put("activityName", activityName);
+                variables.put("isUpdate", isUpdate);
+                variables.put("loginUrl", baseUrl + "/login");
+                variables.put("year", String.valueOf(Year.now().getValue()));
+
+                boolean success = sendEmailWithTemplate(toEmail, toName, TEMPLATE_BILL_NOTIFICATION, lang, variables);
+                if (!success) {
+                    logger.warn("账单通知邮件发送失败: {}", toEmail);
+                }
+            } catch (Exception e) {
+                logger.error("发送账单通知邮件异常 [{}]: {}", toEmail, e.getMessage());
+            }
+        }).start();
+    }
+
+    /**
+     * 使用数据库模板发送邮件（支持多语言）
+     */
+    public boolean sendEmailWithTemplate(String toEmail, String toName, String templateCode,
+                                         String language, Map<String, Object> variables) {
+        // 使用 Thymeleaf 渲染模板
+        String htmlContent = templateService.renderTemplate(templateCode, language, variables);
+        String subject = templateService.renderSubject(templateCode, language, variables);
+
+        if (htmlContent == null) {
+            logger.error("邮件模板渲染失败: {}", templateCode);
+            return false;
+        }
 
         return sendEmail(toEmail, toName, subject, htmlContent);
     }
 
     /**
-     * 发送邮件（通用方法）
+     * 使用数据库模板发送邮件（兼容旧接口，使用 String 变量）
+     * @deprecated 推荐使用 sendEmailWithTemplate(String, String, String, String, Map<String, Object>)
+     */
+    @Deprecated
+    public boolean sendEmailWithTemplate(String toEmail, String toName, String templateCode, Map<String, String> variables) {
+        // 转换为 Object 类型的 Map
+        Map<String, Object> objectVariables = new HashMap<>();
+        if (variables != null) {
+            objectVariables.putAll(variables);
+        }
+        return sendEmailWithTemplate(toEmail, toName, templateCode, DEFAULT_LANGUAGE, objectVariables);
+    }
+
+    /**
+     * 发送邮件（核心方法）
      */
     public boolean sendEmail(String toEmail, String toName, String subject, String htmlContent) {
-        if (brevoApiKey == null || brevoApiKey.isEmpty()) {
-            logger.error("Brevo API key not configured");
+        if (!initialized) {
+            logger.warn("邮件服务未初始化，跳过发送邮件到: {}", toEmail);
             return false;
         }
 
         try {
-            String url = "https://api.brevo.com/v3/smtp/email";
+            SendSmtpEmail email = new SendSmtpEmail();
 
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.set("api-key", brevoApiKey);
-
-            Map<String, Object> body = new HashMap<>();
-            
             // 发件人
-            Map<String, String> sender = new HashMap<>();
-            sender.put("name", senderName);
-            sender.put("email", senderEmail);
-            body.put("sender", sender);
+            SendSmtpEmailSender sender = new SendSmtpEmailSender();
+            sender.setName(senderName);
+            sender.setEmail(senderEmail);
+            email.setSender(sender);
 
             // 收件人
-            List<Map<String, String>> to = new ArrayList<>();
-            Map<String, String> recipient = new HashMap<>();
-            recipient.put("email", toEmail);
+            SendSmtpEmailTo recipient = new SendSmtpEmailTo();
+            recipient.setEmail(toEmail);
             if (toName != null && !toName.isEmpty()) {
-                recipient.put("name", toName);
+                recipient.setName(toName);
             }
-            to.add(recipient);
-            body.put("to", to);
+            email.setTo(Collections.singletonList(recipient));
 
             // 主题和内容
-            body.put("subject", subject);
-            body.put("htmlContent", htmlContent);
+            email.setSubject(subject);
+            email.setHtmlContent(htmlContent);
 
-            HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
-            ResponseEntity<String> response = restTemplate.postForEntity(url, request, String.class);
-
-            if (response.getStatusCode().is2xxSuccessful()) {
-                logger.info("Email sent successfully to {}", toEmail);
-                return true;
-            } else {
-                logger.error("Failed to send email: {}", response.getBody());
-                return false;
-            }
+            // 发送
+            emailApi.sendTransacEmail(email);
+            logger.info("邮件发送成功: {} -> {}", subject, toEmail);
+            return true;
 
         } catch (Exception e) {
-            logger.error("Error sending email to {}: {}", toEmail, e.getMessage());
+            logger.error("邮件发送失败 [{}]: {}", toEmail, e.getMessage());
             return false;
         }
     }
 
     /**
-     * 构建密码重置邮件HTML
+     * 检查邮件服务是否可用
      */
-    private String buildPasswordResetHtml(String userName, String resetLink) {
-        return "<!DOCTYPE html>" +
-            "<html>" +
-            "<head>" +
-            "<meta charset='UTF-8'>" +
-            "<meta name='viewport' content='width=device-width, initial-scale=1.0'>" +
-            "</head>" +
-            "<body style='margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;'>" +
-            "<div style='max-width:600px;margin:0 auto;padding:40px 20px;'>" +
-            
-            // Logo 和标题
-            "<div style='text-align:center;margin-bottom:32px;'>" +
-            "<h1 style='color:#FFA726;font-size:28px;margin:0 0 8px 0;'>Pay友</h1>" +
-            "<p style='color:#666;font-size:14px;margin:0;'>AA记账分账神器</p>" +
-            "</div>" +
-            
-            // 内容卡片
-            "<div style='background:#fff;border-radius:16px;padding:32px;box-shadow:0 4px 20px rgba(255,152,0,0.1);'>" +
-            "<h2 style='color:#333;font-size:20px;margin:0 0 16px 0;'>密码重置</h2>" +
-            "<p style='color:#666;font-size:15px;line-height:1.6;margin:0 0 24px 0;'>" +
-            "你好" + (userName != null ? " " + userName : "") + "，<br><br>" +
-            "我们收到了你的密码重置请求。请点击下方按钮重置密码：" +
-            "</p>" +
-            
-            // 重置按钮
-            "<div style='text-align:center;margin:32px 0;'>" +
-            "<a href='" + resetLink + "' style='display:inline-block;padding:14px 40px;background:linear-gradient(135deg,#FFA726 0%,#FF9800 100%);color:#fff;text-decoration:none;border-radius:10px;font-size:16px;font-weight:600;box-shadow:0 4px 15px rgba(255,152,0,0.3);'>重置密码</a>" +
-            "</div>" +
-            
-            // 备用链接
-            "<p style='color:#999;font-size:13px;line-height:1.6;margin:24px 0 0 0;'>" +
-            "如果按钮无法点击，请复制以下链接到浏览器：<br>" +
-            "<a href='" + resetLink + "' style='color:#FFA726;word-break:break-all;'>" + resetLink + "</a>" +
-            "</p>" +
-            
-            // 警告
-            "<div style='margin-top:24px;padding:16px;background:#fff8f0;border-radius:8px;border-left:4px solid #FFA726;'>" +
-            "<p style='color:#666;font-size:13px;margin:0;'>" +
-            "⏰ 此链接将在 <strong>1小时</strong> 后失效<br>" +
-            "🔒 如果这不是你本人的操作，请忽略此邮件" +
-            "</p>" +
-            "</div>" +
-            "</div>" +
-            
-            // 页脚
-            "<div style='text-align:center;margin-top:32px;color:#999;font-size:12px;'>" +
-            "<p style='margin:0 0 8px 0;'>© 2025 Pay友 Paybill</p>" +
-            "<p style='margin:0;'>这是一封自动发送的邮件，请勿直接回复</p>" +
-            "</div>" +
-            
-            "</div>" +
-            "</body>" +
-            "</html>";
+    public boolean isAvailable() {
+        return initialized;
     }
 }

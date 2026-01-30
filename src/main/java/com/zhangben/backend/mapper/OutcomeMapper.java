@@ -3,6 +3,7 @@ package com.zhangben.backend.mapper;
 import com.zhangben.backend.model.Outcome;
 import com.zhangben.backend.model.OutcomeExample;
 import java.util.List;
+import java.util.Map;
 import org.apache.ibatis.annotations.Param;
 
 public interface OutcomeMapper {
@@ -117,4 +118,14 @@ public interface OutcomeMapper {
      * @mbg.generated Wed Jan 28 08:42:00 JST 2026
      */
     int updateByPrimaryKey(Outcome row);
+
+    /**
+     * 根据活动ID查询账单列表
+     */
+    List<Map<String, Object>> selectByActivityId(@Param("activityId") Integer activityId);
+
+    /**
+     * 软删除账单
+     */
+    int softDeleteById(@Param("id") Integer id);
 }

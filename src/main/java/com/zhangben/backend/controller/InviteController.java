@@ -1,10 +1,12 @@
 package com.zhangben.backend.controller;
 
 import cn.dev33.satoken.stp.StpUtil;
+import com.zhangben.backend.mapper.ActivityMapper;
 import com.zhangben.backend.mapper.ActivityMemberMapper;
 import com.zhangben.backend.mapper.FavoredUserMapper;
 import com.zhangben.backend.mapper.InviteLinkMapper;
 import com.zhangben.backend.mapper.UserMapper;
+import com.zhangben.backend.model.Activity;
 import com.zhangben.backend.model.FavoredUser;
 import com.zhangben.backend.model.InviteLink;
 import com.zhangben.backend.model.User;
@@ -23,6 +25,9 @@ public class InviteController {
 
     @Autowired
     private FavoredUserMapper favoredUserMapper;
+
+    @Autowired
+    private ActivityMapper activityMapper;
 
     @Autowired
     private ActivityMemberMapper activityMemberMapper;
@@ -45,6 +50,17 @@ public class InviteController {
         Integer activityId = (Integer) req.get("activityId");
         Integer maxUses = (Integer) req.getOrDefault("maxUses", 0);
         Integer expireDays = (Integer) req.get("expireDays");
+
+        // 如果是活动邀请，检查活动是否已结算
+        if ("activity".equals(type) && activityId != null) {
+            Activity activity = activityMapper.selectById(activityId);
+            if (activity == null) {
+                throw new RuntimeException("活动不存在");
+            }
+            if (activity.getStatus() == 2) {
+                throw new RuntimeException("活动已结算，无法生成邀请链接");
+            }
+        }
 
         // 生成唯一邀请码
         String code = generateCode();
@@ -132,6 +148,14 @@ public class InviteController {
             throw new RuntimeException("邀请链接已达使用上限");
         }
 
+        // 如果是活动邀请，检查活动是否已结算
+        if ("activity".equals(link.getType()) && link.getActivityId() != null) {
+            Activity activity = activityMapper.selectById(link.getActivityId());
+            if (activity != null && activity.getStatus() == 2) {
+                throw new RuntimeException("活动已结算，邀请链接已失效");
+            }
+        }
+
         // 获取创建者信息
         User creator = userMapper.selectByPrimaryKey(link.getCreatorId());
 
@@ -201,6 +225,15 @@ public class InviteController {
             // 活动邀请 - 加入活动
             if (link.getActivityId() == null) {
                 throw new RuntimeException("活动不存在");
+            }
+
+            // 检查活动是否已结算
+            Activity activity = activityMapper.selectById(link.getActivityId());
+            if (activity == null) {
+                throw new RuntimeException("活动不存在");
+            }
+            if (activity.getStatus() == 2) {
+                throw new RuntimeException("活动已结算，无法加入");
             }
 
             // 检查是否已是成员

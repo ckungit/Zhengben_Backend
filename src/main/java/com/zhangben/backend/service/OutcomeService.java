@@ -25,4 +25,39 @@ public interface OutcomeService {
      * @param userId 当前用户ID（用于权限校验）
      */
     void deleteOutcome(Integer outcomeId, Integer userId);
+
+    /**
+     * 获取单个支出记录详情
+     * @param outcomeId 记录ID
+     * @param userId 当前用户ID（用于权限校验）
+     */
+    RecentOutcomeItem getOutcomeById(Integer outcomeId, Integer userId);
+
+    /**
+     * 更新支出记录
+     * @param outcomeId 记录ID
+     * @param userId 当前用户ID（用于权限校验）
+     * @param req 更新请求
+     */
+    void updateOutcome(Integer outcomeId, Integer userId, OutcomeCreateRequest req);
+
+    /**
+     * 搜索历史账单
+     * @param userId 用户ID
+     * @param keyword 搜索关键词（搜索备注）
+     * @param startDate 开始日期（可选）
+     * @param endDate 结束日期（可选）
+     * @param styleId 分类ID（可选）
+     * @param limit 返回数量
+     * @param offset 偏移量
+     */
+    List<RecentOutcomeItem> searchOutcomes(Integer userId, String keyword,
+            java.time.LocalDate startDate, java.time.LocalDate endDate,
+            Integer styleId, Integer limit, Integer offset);
+
+    /**
+     * 获取搜索结果总数
+     */
+    Integer countSearchOutcomes(Integer userId, String keyword,
+            java.time.LocalDate startDate, java.time.LocalDate endDate, Integer styleId);
 }

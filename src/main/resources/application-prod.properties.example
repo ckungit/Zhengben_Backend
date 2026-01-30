@@ -38,6 +38,18 @@ cors.max-age=3600
 google.client-id=${GOOGLE_CLIENT_ID}
 
 # --------------------------------
+# Redis 配置 (Sa-Token 会话存储)
+# --------------------------------
+spring.data.redis.host=${REDIS_HOST:redis}
+spring.data.redis.port=${REDIS_PORT:6379}
+spring.data.redis.password=${REDIS_PASSWORD}
+spring.data.redis.database=0
+spring.data.redis.timeout=10s
+spring.data.redis.lettuce.pool.max-active=8
+spring.data.redis.lettuce.pool.max-idle=4
+spring.data.redis.lettuce.pool.min-idle=1
+
+# --------------------------------
 # V14-V17: 应用配置
 # --------------------------------
 app.base-url=${APP_BASE_URL:https://www.aabillpay.com}
@@ -45,6 +57,6 @@ app.base-url=${APP_BASE_URL:https://www.aabillpay.com}
 # --------------------------------
 # V15: Brevo 邮件服务配置
 # --------------------------------
-brevo.api-key=${BREVO_API_KEY:}
+brevo.api-key=${BREVO_API_KEY}
 brevo.sender-email=noreply@aabillpay.com
 brevo.sender-name=Pay友

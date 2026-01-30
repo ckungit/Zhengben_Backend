@@ -31,6 +31,12 @@ public class SaTokenConfig implements WebMvcConfigurer {
                     // Google SSO 登录不拦截
                     .notMatch("/api/auth/google/login")
 
+                    // V15: 密码重置相关接口不拦截
+                    .notMatch("/api/auth/forgot-password", "/api/auth/verify-reset-token", "/api/auth/reset-password")
+
+                    // V14: 邀请链接查看接口不拦截（使用需要登录）
+                    .notMatch("/api/invite/info/**")
+
                     // 静态资源不拦截
                     .notMatch("/static/**", "/public/**", "/resources/**", "/favicon.ico")
 

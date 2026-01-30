@@ -381,14 +381,37 @@ public class GoogleAuthController {
     @GetMapping("/check-profile")
     public Map<String, Object> checkProfile() {
         StpUtil.checkLogin();
-        Integer userId = StpUtil.getLoginIdAsInt();
 
-        User user = userMapper.selectByPrimaryKey(userId);
-        
+        String loginDevice = StpUtil.getLoginDevice();
         Map<String, Object> result = new HashMap<>();
-        result.put("needsCompletion", user.getProfileCompleted() == null || !user.getProfileCompleted());
-        result.put("email", user.getEmail());
-        
+
+        // 如果是临时登录（google-temp），需要完善资料
+        if ("google-temp".equals(loginDevice)) {
+            String googleEmail = (String) StpUtil.getSession().get("googleEmail");
+            result.put("needsCompletion", true);
+            result.put("email", googleEmail);
+            return result;
+        }
+
+        // 正常用户登录
+        try {
+            Integer userId = StpUtil.getLoginIdAsInt();
+            User user = userMapper.selectByPrimaryKey(userId);
+
+            if (user == null) {
+                result.put("needsCompletion", true);
+                result.put("email", "");
+                return result;
+            }
+
+            result.put("needsCompletion", user.getProfileCompleted() == null || !user.getProfileCompleted());
+            result.put("email", user.getEmail());
+        } catch (Exception e) {
+            // 如果无法解析用户ID，说明是临时登录状态
+            result.put("needsCompletion", true);
+            result.put("email", "");
+        }
+
         return result;
     }
 }

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 
     <modelVersion>4.0.0</modelVersion>
 
@@ -26,6 +26,20 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!-- Jackson (Sa-Token Redis 序列化需要) -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-annotations</artifactId>
         </dependency>
 
         <!-- MyBatis -->
@@ -54,7 +68,7 @@
         <dependency>
             <groupId>cn.dev33</groupId>
             <artifactId>sa-token-spring-boot3-starter</artifactId>
-            <version>1.38.0</version>
+            <version>1.39.0</version>
         </dependency>
 
         <!-- BCrypt 密码加密（只用这个，不用 Spring Security 登录） -->
@@ -74,6 +88,42 @@
 		    <groupId>com.google.api-client</groupId>
 		    <artifactId>google-api-client</artifactId>
 		    <version>2.2.0</version>
+		</dependency>
+		
+		<!-- Sa-Token Redis (使用默认JDK序列化，兼容性更好) -->
+		<dependency>
+		    <groupId>cn.dev33</groupId>
+		    <artifactId>sa-token-redis</artifactId>
+		    <version>1.39.0</version>
+		</dependency>
+		
+		<dependency>
+		    <groupId>org.springframework.boot</groupId>
+		    <artifactId>spring-boot-starter-data-redis</artifactId>
+		</dependency>
+		
+		<dependency>
+		    <groupId>org.apache.commons</groupId>
+		    <artifactId>commons-pool2</artifactId>
+		</dependency>
+		
+		<dependency>
+		    <groupId>com.sendinblue</groupId>
+		    <artifactId>sib-api-v3-sdk</artifactId>
+		    <version>7.0.0</version>
+		</dependency>
+
+		<!-- Thymeleaf 模板引擎（用于邮件模板） -->
+		<dependency>
+		    <groupId>org.springframework.boot</groupId>
+		    <artifactId>spring-boot-starter-thymeleaf</artifactId>
+		</dependency>
+
+		<!-- OGNL（Thymeleaf 依赖，使用 3.3.4 兼容版本） -->
+		<dependency>
+		    <groupId>ognl</groupId>
+		    <artifactId>ognl</artifactId>
+		    <version>3.3.4</version>
 		</dependency>
 
     </dependencies>

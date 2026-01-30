@@ -13,13 +13,19 @@ public class RecentOutcomeItem {
     private Long perAmount;        // 人均金额
     private String comment;        // 备注
     private Byte repayFlag;        // 1=支付，2=还款
+    private Integer styleId;       // 分类ID
     private String styleName;      // 分类名称
     private LocalDateTime payDatetime;
     private List<String> participantNames; // 参与者昵称列表
+    private List<Integer> participantIds;  // 参与者ID列表
     
     // 还款相关
     private Integer targetUserId;   // 还款对象ID（repayFlag=2时有值）
     private String targetUserName;  // 还款对象昵称（repayFlag=2时有值）
+
+    // 活动相关
+    private Integer activityId;     // 关联的活动ID
+    private String activityName;    // 活动名称
 
     // Getters and Setters
     public Integer getId() {
@@ -86,6 +92,22 @@ public class RecentOutcomeItem {
         this.participantNames = participantNames;
     }
 
+    public List<Integer> getParticipantIds() {
+        return participantIds;
+    }
+
+    public void setParticipantIds(List<Integer> participantIds) {
+        this.participantIds = participantIds;
+    }
+
+    public Integer getStyleId() {
+        return styleId;
+    }
+
+    public void setStyleId(Integer styleId) {
+        this.styleId = styleId;
+    }
+
     public Integer getTargetUserId() {
         return targetUserId;
     }
@@ -100,5 +122,21 @@ public class RecentOutcomeItem {
 
     public void setTargetUserName(String targetUserName) {
         this.targetUserName = targetUserName;
+    }
+
+    public Integer getActivityId() {
+        return activityId;
+    }
+
+    public void setActivityId(Integer activityId) {
+        this.activityId = activityId;
+    }
+
+    public String getActivityName() {
+        return activityName;
+    }
+
+    public void setActivityName(String activityName) {
+        this.activityName = activityName;
     }
 }

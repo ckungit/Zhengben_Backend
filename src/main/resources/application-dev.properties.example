@@ -33,14 +33,24 @@ cors.max-age=3600
 google.client-id=${GOOGLE_CLIENT_ID}
 
 # --------------------------------
-# V14-V17: åºç¨éç½®
+# Redis 配置 (Sa-Token 会话存储)
+# 开发环境连接本地或服务器 Redis
+# --------------------------------
+spring.data.redis.host=192.168.95.3
+spring.data.redis.port=6379
+spring.data.redis.password=testtesttest
+spring.data.redis.database=0
+spring.data.redis.timeout=10s
+
+# --------------------------------
+# V14-V17: 应用配置
 # --------------------------------
 app.base-url=http://localhost:5173
 
 # --------------------------------
-# V15: Brevo é®ä»¶æå¡éç½® (å¼åç¯å¢)
-# å¯è®¾ç½®çå®API Keyè¿è¡æµè¯ï¼æçç©ºè·³è¿é®ä»¶åé
+# V15: Brevo 邮件服务配置 (开发环境)
+# 可设置真实API Key进行测试，或留空跳过邮件发送
 # --------------------------------
-brevo.api-key=${BREVO_API_KEY:}
+brevo.api-key=no_use_email
 brevo.sender-email=noreply@aabillpay.com
-brevo.sender-name=Payå
+brevo.sender-name=Pay友
