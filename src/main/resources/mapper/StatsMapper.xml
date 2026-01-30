@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhangben.backend.mapper.StatsMapper">
+
+    <!-- 月度统计 -->
+    <select id="getMonthlyStats" resultType="map">
+        SELECT
+            DATE_FORMAT(pay_datetime, '%Y-%m') as month,
+            SUM(per_amount) as totalAmount,
+            COUNT(*) as count
+        FROM outcome o
+        INNER JOIN outcome_participant p ON o.id = p.outcome_id
+        WHERE p.user_id = #{userId}
+            AND o.deleted_flag = 0
+            AND o.repay_flag = 1
+            AND o.pay_datetime >= DATE_SUB(CURDATE(), INTERVAL #{months} MONTH)
+        GROUP BY DATE_FORMAT(pay_datetime, '%Y-%m')
+        ORDER BY month
+    </select>
+
+    <!-- 分类统计 -->
+    <select id="getCategoryStats" resultType="map">
+        SELECT
+            COALESCE(s.style_name, '其他') as category,
+            SUM(o.per_amount) as totalAmount,
+            COUNT(*) as count
+        FROM outcome o
+        INNER JOIN outcome_participant p ON o.id = p.outcome_id
+        LEFT JOIN pay_style s ON o.style_id = s.id
+        WHERE p.user_id = #{userId}
+            AND o.deleted_flag = 0
+            AND o.repay_flag = 1
+            AND o.pay_datetime >= DATE_SUB(CURDATE(), INTERVAL #{months} MONTH)
+        GROUP BY o.style_id, s.style_name
+        ORDER BY totalAmount DESC
+    </select>
+
+    <!-- 消费伙伴统计 -->
+    <select id="getPartnerStats" resultType="map">
+        SELECT
+            o.payer_userid as partnerId,
+            u.nickname as partnerName,
+            SUM(o.per_amount) as totalAmount,
+            COUNT(*) as count
+        FROM outcome o
+        INNER JOIN outcome_participant p ON o.id = p.outcome_id
+        INNER JOIN user u ON o.payer_userid = u.id
+        WHERE p.user_id = #{userId}
+            AND o.payer_userid != #{userId}
+            AND o.deleted_flag = 0
+            AND o.repay_flag = 1
+            AND o.pay_datetime >= DATE_SUB(CURDATE(), INTERVAL #{months} MONTH)
+        GROUP BY o.payer_userid, u.nickname
+        ORDER BY totalAmount DESC
+        LIMIT 10
+    </select>
+
+    <!-- 总览统计 -->
+    <select id="getOverviewStats" resultType="map">
+        SELECT
+            COALESCE(SUM(o.per_amount), 0) as totalExpense,
+            COUNT(*) as expenseCount,
+            COALESCE(AVG(o.per_amount), 0) as avgExpense
+        FROM outcome o
+        INNER JOIN outcome_participant p ON o.id = p.outcome_id
+        WHERE p.user_id = #{userId}
+            AND o.deleted_flag = 0
+            AND o.repay_flag = 1
+            AND o.pay_datetime >= DATE_SUB(CURDATE(), INTERVAL #{months} MONTH)
+    </select>
+
+    <!-- 每日平均统计 -->
+    <select id="getDailyAvgStats" resultType="map">
+        SELECT
+            DATE(pay_datetime) as date,
+            SUM(per_amount) as totalAmount
+        FROM outcome o
+        INNER JOIN outcome_participant p ON o.id = p.outcome_id
+        WHERE p.user_id = #{userId}
+            AND o.deleted_flag = 0
+            AND o.repay_flag = 1
+            AND o.pay_datetime >= DATE_SUB(CURDATE(), INTERVAL #{days} DAY)
+        GROUP BY DATE(pay_datetime)
+        ORDER BY date
+    </select>
+
+</mapper>

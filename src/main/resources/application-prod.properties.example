@@ -36,3 +36,15 @@ cors.max-age=3600
 
 # Google SSO
 google.client-id=${GOOGLE_CLIENT_ID}
+
+# --------------------------------
+# V14-V17: 应用配置
+# --------------------------------
+app.base-url=${APP_BASE_URL:https://www.aabillpay.com}
+
+# --------------------------------
+# V15: Brevo 邮件服务配置
+# --------------------------------
+brevo.api-key=${BREVO_API_KEY:}
+brevo.sender-email=noreply@aabillpay.com
+brevo.sender-name=Pay友

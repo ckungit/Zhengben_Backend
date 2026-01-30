@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhangben.backend.mapper.ActivityMapper">
+
+    <resultMap id="BaseResultMap" type="com.zhangben.backend.model.Activity">
+        <id column="id" property="id"/>
+        <result column="name" property="name"/>
+        <result column="description" property="description"/>
+        <result column="cover_emoji" property="coverEmoji"/>
+        <result column="creator_id" property="creatorId"/>
+        <result column="status" property="status"/>
+        <result column="settle_time" property="settleTime"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.zhangben.backend.model.Activity" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO activity (name, description, cover_emoji, creator_id, status)
+        VALUES (#{name}, #{description}, #{coverEmoji}, #{creatorId}, #{status})
+    </insert>
+
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT * FROM activity WHERE id = #{id}
+    </select>
+
+    <select id="selectByUserId" resultMap="BaseResultMap">
+        SELECT a.* FROM activity a
+        INNER JOIN activity_member m ON a.id = m.activity_id
+        WHERE m.user_id = #{userId}
+        ORDER BY a.created_at DESC
+    </select>
+
+    <update id="update" parameterType="com.zhangben.backend.model.Activity">
+        UPDATE activity SET
+            name = #{name},
+            description = #{description},
+            cover_emoji = #{coverEmoji},
+            status = #{status},
+            settle_time = #{settleTime}
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM activity WHERE id = #{id}
+    </delete>
+
+    <select id="selectActivityStats" resultType="map">
+        SELECT
+            COALESCE(SUM(amount), 0) as totalAmount,
+            COUNT(*) as outcomeCount
+        FROM outcome
+        WHERE activity_id = #{activityId} AND deleted_flag = 0 AND repay_flag = 1
+    </select>
+
+    <select id="selectMemberStats" resultType="map">
+        SELECT
+            m.user_id as userId,
+            u.nickname,
+            COALESCE(paid.total, 0) as paidAmount,
+            COALESCE(owed.total, 0) as shouldPayAmount
+        FROM activity_member m
+        INNER JOIN user u ON m.user_id = u.id
+        LEFT JOIN (
+            SELECT payer_userid, SUM(amount) as total
+            FROM outcome
+            WHERE activity_id = #{activityId} AND deleted_flag = 0 AND repay_flag = 1
+            GROUP BY payer_userid
+        ) paid ON m.user_id = paid.payer_userid
+        LEFT JOIN (
+            SELECT p.user_id, SUM(o.per_amount) as total
+            FROM outcome_participant p
+            INNER JOIN outcome o ON p.outcome_id = o.id
+            WHERE o.activity_id = #{activityId} AND o.deleted_flag = 0 AND o.repay_flag = 1
+            GROUP BY p.user_id
+        ) owed ON m.user_id = owed.user_id
+        WHERE m.activity_id = #{activityId}
+    </select>
+
+</mapper>

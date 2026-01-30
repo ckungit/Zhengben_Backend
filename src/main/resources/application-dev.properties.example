@@ -31,3 +31,16 @@ cors.max-age=3600
 
 # Google SSO
 google.client-id=${GOOGLE_CLIENT_ID}
+
+# --------------------------------
+# V14-V17: åºç¨éç½®
+# --------------------------------
+app.base-url=http://localhost:5173
+
+# --------------------------------
+# V15: Brevo é®ä»¶æå¡éç½® (å¼åç¯å¢)
+# å¯è®¾ç½®çå®API Keyè¿è¡æµè¯ï¼æçç©ºè·³è¿é®ä»¶åé
+# --------------------------------
+brevo.api-key=${BREVO_API_KEY:}
+brevo.sender-email=noreply@aabillpay.com
+brevo.sender-name=Payå
