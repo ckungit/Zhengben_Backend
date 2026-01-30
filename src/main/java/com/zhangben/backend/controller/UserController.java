@@ -53,6 +53,7 @@ public class UserController {
             item.setNickname(u.getNickname());
             item.setEmail(u.getEmail());
             item.setFullName(buildFullName(u.getSecondname(), u.getFirstname()));
+            item.setAvatarUrl(u.getAvatarUrl());
             item.setPaypaySupported(u.getPaypayFlag() != null && u.getPaypayFlag() == 1);
             item.setBankSupported(u.getBankFlag() != null && u.getBankFlag() == 1);
             result.add(item);
@@ -85,6 +86,7 @@ public class UserController {
             item.setNickname(u.getNickname());
             item.setEmail(u.getEmail());
             item.setFullName(buildFullName(u.getSecondname(), u.getFirstname()));
+            item.setAvatarUrl(u.getAvatarUrl());
             item.setPaypaySupported(u.getPaypayFlag() != null && u.getPaypayFlag() == 1);
             item.setBankSupported(u.getBankFlag() != null && u.getBankFlag() == 1);
             result.add(item);

@@ -27,8 +27,12 @@ public class OutcomeController {
     @PostMapping("/create")
     public ResponseEntity<?> createOutcome(@RequestBody OutcomeCreateRequest req) {
         StpUtil.checkLogin();
-        outcomeService.createOutcome(req);
-        return ResponseEntity.ok("记录创建成功");
+        try {
+            outcomeService.createOutcome(req);
+            return ResponseEntity.ok("记录创建成功");
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
     }
 
     /**

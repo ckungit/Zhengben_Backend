@@ -8,6 +8,7 @@ public class UserProfileResponse {
     private Integer id;
     private String email;
     private String nickname;
+    private String avatarUrl;
     private String role;
     private String firstname;
     private String secondname;
@@ -41,6 +42,14 @@ public class UserProfileResponse {
 
     public void setNickname(String nickname) {
         this.nickname = nickname;
+    }
+
+    public String getAvatarUrl() {
+        return avatarUrl;
+    }
+
+    public void setAvatarUrl(String avatarUrl) {
+        this.avatarUrl = avatarUrl;
     }
 
     public String getRole() {

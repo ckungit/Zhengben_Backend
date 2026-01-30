@@ -9,7 +9,8 @@ public class UserSearchResult {
     private String nickname;
     private String email;
     private String fullName;
-    
+    private String avatarUrl;
+
     // 支持的收款方式
     private Boolean paypaySupported;
     private Boolean bankSupported;
@@ -44,6 +45,14 @@ public class UserSearchResult {
 
     public void setFullName(String fullName) {
         this.fullName = fullName;
+    }
+
+    public String getAvatarUrl() {
+        return avatarUrl;
+    }
+
+    public void setAvatarUrl(String avatarUrl) {
+        this.avatarUrl = avatarUrl;
     }
 
     public Boolean getPaypaySupported() {

@@ -6,11 +6,17 @@ import cn.dev33.satoken.stp.StpUtil;
 import com.zhangben.backend.dto.CurrentUserResponse;
 import com.zhangben.backend.dto.LoginRequest;
 import com.zhangben.backend.dto.RegisterRequest;
+import com.zhangben.backend.mapper.UserMapper;
 import com.zhangben.backend.model.User;
+import com.zhangben.backend.service.R2StorageService;
 import com.zhangben.backend.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.io.ByteArrayInputStream;
+import java.time.LocalDateTime;
+import java.util.Base64;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -18,6 +24,12 @@ public class AuthController {
 
     @Autowired
     private UserService userService;
+
+    @Autowired
+    private UserMapper userMapper;
+
+    @Autowired
+    private R2StorageService r2StorageService;
 
     // 登录
     @PostMapping("/login")
@@ -71,9 +83,64 @@ public class AuthController {
 
         req.setRole("user"); // 默认角色
 
-        userService.createUser(req);
+        User user = userService.createUser(req);
+
+        // V24: 处理头像上传 (Base64)
+        if (req.getAvatarBase64() != null && !req.getAvatarBase64().isEmpty()) {
+            try {
+                String avatarUrl = uploadAvatarFromBase64(req.getAvatarBase64(), user.getId());
+                if (avatarUrl != null) {
+                    User updateUser = new User();
+                    updateUser.setId(user.getId());
+                    updateUser.setAvatarUrl(avatarUrl);
+                    updateUser.setUpdatedAt(LocalDateTime.now());
+                    userMapper.updateByPrimaryKeySelective(updateUser);
+                }
+            } catch (Exception e) {
+                // 头像上传失败不影响注册，仅记录日志
+                System.err.println("注册时头像上传失败: " + e.getMessage());
+            }
+        }
 
         return ResponseEntity.ok("注册成功");
+    }
+
+    /**
+     * 从 Base64 数据上传头像到 R2
+     */
+    private String uploadAvatarFromBase64(String base64Data, Integer userId) {
+        try {
+            // 解析 Base64 数据 (格式: data:image/webp;base64,xxxxx)
+            String[] parts = base64Data.split(",");
+            if (parts.length != 2) {
+                return null;
+            }
+
+            // 提取 MIME 类型
+            String mimeType = "image/webp";
+            if (parts[0].contains("image/jpeg")) {
+                mimeType = "image/jpeg";
+            } else if (parts[0].contains("image/png")) {
+                mimeType = "image/png";
+            }
+
+            // 解码 Base64
+            byte[] imageBytes = Base64.getDecoder().decode(parts[1]);
+
+            // 检查大小 (最大 50KB)
+            if (imageBytes.length > 51200) {
+                System.err.println("头像文件过大: " + imageBytes.length + " bytes");
+                return null;
+            }
+
+            // 上传到 R2
+            ByteArrayInputStream inputStream = new ByteArrayInputStream(imageBytes);
+            return r2StorageService.uploadAvatar(inputStream, mimeType, imageBytes.length, userId);
+
+        } catch (Exception e) {
+            System.err.println("头像 Base64 解析失败: " + e.getMessage());
+            return null;
+        }
     }
 
     // 当前用户信息

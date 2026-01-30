@@ -17,6 +17,16 @@ public class RegisterRequest {
     private String bankBranch;
     private String bankAccount;
 
+    // V24: 头像 Base64 数据 (可选)
+    private String avatarBase64;
+
+    public String getAvatarBase64() {
+        return avatarBase64;
+    }
+
+    public void setAvatarBase64(String avatarBase64) {
+        this.avatarBase64 = avatarBase64;
+    }
 
     public String getRole() {
 		return role;

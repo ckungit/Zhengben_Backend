@@ -53,4 +53,14 @@ app.base-url=http://localhost:5173
 # --------------------------------
 brevo.api-key=no_use_email
 brevo.sender-email=noreply@aabillpay.com
-brevo.sender-name=Pay友
+brevo.sender-name=PayYou
+
+# --------------------------------
+# V24: Cloudflare R2 存储配置 (开发环境)
+# 请在此处填入开发环境的 R2 配置
+# --------------------------------
+r2.account-id=your_dev_account_id
+r2.access-key=your_dev_access_key
+r2.secret-key=your_dev_secret_key
+r2.bucket-name=avatars-dev
+r2.public-url=https://image.aabillpay.com

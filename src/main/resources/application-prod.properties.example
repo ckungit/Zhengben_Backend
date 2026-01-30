@@ -59,4 +59,14 @@ app.base-url=${APP_BASE_URL:https://www.aabillpay.com}
 # --------------------------------
 brevo.api-key=${BREVO_API_KEY}
 brevo.sender-email=noreply@aabillpay.com
-brevo.sender-name=Pay友
+brevo.sender-name=PayYou
+
+# --------------------------------
+# V24: Cloudflare R2 存储配置 (生产环境)
+# 通过 Docker 环境变量注入
+# --------------------------------
+r2.account-id=${R2_ACCOUNT_ID}
+r2.access-key=${R2_ACCESS_KEY}
+r2.secret-key=${R2_SECRET_KEY}
+r2.bucket-name=${R2_BUCKET_NAME:avatars}
+r2.public-url=https://image.aabillpay.com
