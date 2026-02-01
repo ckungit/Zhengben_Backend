@@ -133,6 +133,26 @@
 		    <version>2.25.16</version>
 		</dependency>
 
+		<!-- V25: Lombok - 简化实体类代码 -->
+		<dependency>
+		    <groupId>org.projectlombok</groupId>
+		    <artifactId>lombok</artifactId>
+		    <optional>true</optional>
+		</dependency>
+
+		<!-- V25: Hutool - 强大的 Java 工具库 -->
+		<dependency>
+		    <groupId>cn.hutool</groupId>
+		    <artifactId>hutool-all</artifactId>
+		    <version>5.8.26</version>
+		</dependency>
+
+		<!-- V25: Jakarta Validation - 请求参数校验 -->
+		<dependency>
+		    <groupId>org.springframework.boot</groupId>
+		    <artifactId>spring-boot-starter-validation</artifactId>
+		</dependency>
+
     </dependencies>
 
     <profiles>

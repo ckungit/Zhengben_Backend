@@ -34,4 +34,13 @@ public class FavoredUserController {
         Integer userId = StpUtil.getLoginIdAsInt();
         return favoredUserService.listFavored(userId);
     }
+
+    /**
+     * V25: 获取待处理的好友请求（谁加了我但我没加他们）
+     */
+    @GetMapping("/pending")
+    public List<User> getPendingRequests() {
+        Integer userId = StpUtil.getLoginIdAsInt();
+        return favoredUserService.getPendingFriendRequests(userId);
+    }
 }

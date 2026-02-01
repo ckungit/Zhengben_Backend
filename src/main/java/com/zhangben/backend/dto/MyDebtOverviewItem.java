@@ -9,6 +9,7 @@ public class MyDebtOverviewItem {
 
     private Integer creditorId;
     private String creditorName;
+    private String creditorAvatarUrl;
     private Long totalAmount;
     private List<CreditorDebtDetailItem> details;
     
@@ -30,6 +31,14 @@ public class MyDebtOverviewItem {
 
     public void setCreditorName(String creditorName) {
         this.creditorName = creditorName;
+    }
+
+    public String getCreditorAvatarUrl() {
+        return creditorAvatarUrl;
+    }
+
+    public void setCreditorAvatarUrl(String creditorAvatarUrl) {
+        this.creditorAvatarUrl = creditorAvatarUrl;
     }
 
     public Long getTotalAmount() {

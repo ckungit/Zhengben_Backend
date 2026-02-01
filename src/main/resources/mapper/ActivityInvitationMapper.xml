@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhangben.backend.mapper.ActivityInvitationMapper">
+
+    <resultMap id="BaseResultMap" type="com.zhangben.backend.model.ActivityInvitation">
+        <id column="id" property="id"/>
+        <result column="activity_id" property="activityId"/>
+        <result column="inviter_id" property="inviterId"/>
+        <result column="invitee_id" property="inviteeId"/>
+        <result column="status" property="status"/>
+        <result column="invite_message" property="inviteMessage"/>
+        <result column="email_sent" property="emailSent"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO activity_invitation (activity_id, inviter_id, invitee_id, status, invite_message, email_sent)
+        VALUES (#{activityId}, #{inviterId}, #{inviteeId}, #{status}, #{inviteMessage}, #{emailSent})
+    </insert>
+
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT * FROM activity_invitation WHERE id = #{id}
+    </select>
+
+    <select id="selectPendingByInvitee" resultType="map">
+        SELECT
+            i.id,
+            i.activity_id as activityId,
+            i.inviter_id as inviterId,
+            i.invite_message as inviteMessage,
+            i.created_at as createdAt,
+            a.name as activityName,
+            a.cover_emoji as activityEmoji,
+            u.nickname as inviterName,
+            u.avatar_url as inviterAvatarUrl
+        FROM activity_invitation i
+        INNER JOIN activity a ON i.activity_id = a.id
+        INNER JOIN user u ON i.inviter_id = u.id
+        WHERE i.invitee_id = #{inviteeId} AND i.status = 0
+        ORDER BY i.created_at DESC
+    </select>
+
+    <select id="selectByActivity" resultType="map">
+        SELECT
+            i.id,
+            i.invitee_id as inviteeId,
+            i.status,
+            i.created_at as createdAt,
+            i.updated_at as updatedAt,
+            u.nickname as inviteeName,
+            u.avatar_url as inviteeAvatarUrl,
+            u.email as inviteeEmail
+        FROM activity_invitation i
+        INNER JOIN user u ON i.invitee_id = u.id
+        WHERE i.activity_id = #{activityId}
+        ORDER BY i.created_at DESC
+    </select>
+
+    <select id="selectByActivityAndInvitee" resultMap="BaseResultMap">
+        SELECT * FROM activity_invitation
+        WHERE activity_id = #{activityId} AND invitee_id = #{inviteeId}
+    </select>
+
+    <update id="updateStatus">
+        UPDATE activity_invitation
+        SET status = #{status}, updated_at = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <update id="markEmailSent">
+        UPDATE activity_invitation SET email_sent = 1 WHERE id = #{id}
+    </update>
+
+    <delete id="deleteByActivity">
+        DELETE FROM activity_invitation WHERE activity_id = #{activityId}
+    </delete>
+
+</mapper>

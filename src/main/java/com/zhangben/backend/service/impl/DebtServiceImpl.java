@@ -319,6 +319,7 @@ public class DebtServiceImpl implements DebtService {
             MyCreditOverviewItem item = new MyCreditOverviewItem();
             item.setDebtorId(debtorId);
             item.setDebtorName(debtor.getNickname());
+            item.setDebtorAvatarUrl(debtor.getAvatarUrl());
             item.setTotalAmount(totalAmount);
 
             List<DebtorDebtDetailItem> details = new ArrayList<>();
@@ -433,6 +434,7 @@ public class DebtServiceImpl implements DebtService {
             MyDebtOverviewItem item = new MyDebtOverviewItem();
             item.setCreditorId(creditorId);
             item.setCreditorName(creditor.getNickname());
+            item.setCreditorAvatarUrl(creditor.getAvatarUrl());
             item.setTotalAmount(totalAmount);
 
             // 添加债权人支持的收款方式

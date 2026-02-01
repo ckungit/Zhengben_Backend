@@ -15,7 +15,7 @@
     </select>
 
     <select id="selectByActivityId" resultType="map">
-        SELECT m.user_id, u.nickname, m.role, m.joined_at
+        SELECT m.user_id, u.nickname, u.avatar_url as avatarUrl, m.role, m.joined_at
         FROM activity_member m
         INNER JOIN user u ON m.user_id = u.id
         WHERE m.activity_id = #{activityId}

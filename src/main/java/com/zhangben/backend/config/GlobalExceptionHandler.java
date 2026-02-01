@@ -5,11 +5,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * 全局异常处理器
@@ -38,6 +41,23 @@ public class GlobalExceptionHandler {
         Map<String, Object> result = new HashMap<>();
         result.put("code", 400);
         result.put("message", e.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(result);
+    }
+
+    /**
+     * V25: 处理参数校验异常 (Jakarta Validation)
+     */
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<Map<String, Object>> handleValidationException(MethodArgumentNotValidException e) {
+        Map<String, Object> result = new HashMap<>();
+        result.put("code", 400);
+
+        // 收集所有校验错误信息
+        String message = e.getBindingResult().getFieldErrors().stream()
+                .map(FieldError::getDefaultMessage)
+                .collect(Collectors.joining(", "));
+
+        result.put("message", message.isEmpty() ? "参数校验失败" : message);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(result);
     }
 
