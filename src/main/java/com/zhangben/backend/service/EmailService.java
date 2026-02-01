@@ -1,7 +1,10 @@
 package com.zhangben.backend.service;
 
 import com.zhangben.backend.mapper.EmailTemplateMapper;
+import com.zhangben.backend.mapper.UserMapper;
 import com.zhangben.backend.model.EmailTemplate;
+import com.zhangben.backend.model.User;
+import com.zhangben.backend.model.UserExample;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,6 +45,9 @@ public class EmailService {
     @Autowired
     private EmailTemplateService templateService;
 
+    @Autowired
+    private UserMapper userMapper;
+
     @Value("${brevo.api-key:}")
     private String brevoApiKey;
 
@@ -76,10 +82,31 @@ public class EmailService {
     }
 
     /**
+     * 获取用户的语言偏好
+     */
+    private String getUserLanguagePreference(String email) {
+        if (email == null) {
+            return DEFAULT_LANGUAGE;
+        }
+        try {
+            UserExample example = new UserExample();
+            example.createCriteria().andEmailEqualTo(email);
+            List<User> users = userMapper.selectByExample(example);
+            if (!users.isEmpty() && users.get(0).getPreferredLanguage() != null) {
+                return users.get(0).getPreferredLanguage();
+            }
+        } catch (Exception e) {
+            logger.warn("获取用户语言偏好失败: {}", e.getMessage());
+        }
+        return DEFAULT_LANGUAGE;
+    }
+
+    /**
      * 发送密码重置邮件
      */
     public boolean sendPasswordResetEmail(String toEmail, String toName, String resetToken) {
         String resetLink = baseUrl + "/reset-password?token=" + resetToken;
+        String language = getUserLanguagePreference(toEmail);
 
         Map<String, Object> variables = new HashMap<>();
         variables.put("USER_NAME", toName != null ? toName : "用户");
@@ -88,20 +115,22 @@ public class EmailService {
         variables.put("APP_NAME", senderName);
         variables.put("YEAR", String.valueOf(Year.now().getValue()));
 
-        return sendEmailWithTemplate(toEmail, toName, TEMPLATE_PASSWORD_RESET, DEFAULT_LANGUAGE, variables);
+        return sendEmailWithTemplate(toEmail, toName, TEMPLATE_PASSWORD_RESET, language, variables);
     }
 
     /**
      * 发送欢迎邮件
      */
     public boolean sendWelcomeEmail(String toEmail, String toName) {
+        String language = getUserLanguagePreference(toEmail);
+
         Map<String, Object> variables = new HashMap<>();
         variables.put("USER_NAME", toName != null ? toName : "新用户");
         variables.put("LOGIN_LINK", baseUrl + "/login");
         variables.put("APP_NAME", senderName);
         variables.put("YEAR", String.valueOf(Year.now().getValue()));
 
-        return sendEmailWithTemplate(toEmail, toName, TEMPLATE_WELCOME, DEFAULT_LANGUAGE, variables);
+        return sendEmailWithTemplate(toEmail, toName, TEMPLATE_WELCOME, language, variables);
     }
 
     /**

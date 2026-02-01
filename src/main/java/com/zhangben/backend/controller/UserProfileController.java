@@ -54,6 +54,7 @@ public class UserProfileController {
         resp.setBankBranch(user.getBankBranch());
         resp.setBankAccount(user.getBankAccount());
         resp.setAvatarUrl(user.getAvatarUrl());
+        resp.setPreferredLanguage(user.getPreferredLanguage());
 
         return resp;
     }
@@ -97,6 +98,22 @@ public class UserProfileController {
                 bankFlag, bankName, bankBranch, bankAccount);
 
         return "收款方式修改成功";
+    }
+
+    /**
+     * V26: 更新语言偏好
+     */
+    @PostMapping("/language")
+    public String updateLanguage(@RequestParam String language) {
+        Integer userId = StpUtil.getLoginIdAsInt();
+
+        User updateUser = new User();
+        updateUser.setId(userId);
+        updateUser.setPreferredLanguage(language);
+        updateUser.setUpdatedAt(LocalDateTime.now());
+        userMapper.updateByPrimaryKeySelective(updateUser);
+
+        return "语言设置已更新";
     }
 
     /**
