@@ -1,7 +1,9 @@
 package com.zhangben.backend.controller;
 
 import cn.dev33.satoken.stp.StpUtil;
+import com.zhangben.backend.mapper.SystemConfigMapper;
 import com.zhangben.backend.mapper.UserMapper;
+import com.zhangben.backend.model.SystemConfig;
 import com.zhangben.backend.model.User;
 import com.zhangben.backend.model.UserExample;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,6 +22,9 @@ public class AdminController {
 
     @Autowired
     private UserMapper userMapper;
+
+    @Autowired
+    private SystemConfigMapper systemConfigMapper;
 
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
@@ -112,5 +117,68 @@ public class AdminController {
             sb.append(chars.charAt(random.nextInt(chars.length())));
         }
         return sb.toString();
+    }
+
+    // ==================== 系统配置管理 ====================
+
+    /**
+     * 获取反馈配置
+     */
+    @GetMapping("/feedback-config")
+    public ResponseEntity<?> getFeedbackConfig() {
+        if (!checkAdmin()) {
+            return ResponseEntity.status(403).body(Map.of("error", "无权限，仅管理员可操作"));
+        }
+
+        SystemConfig enabledConfig = systemConfigMapper.selectByKey("feedback.enabled");
+        SystemConfig emailConfig = systemConfigMapper.selectByKey("feedback.target_email");
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("enabled", enabledConfig != null ? "true".equals(enabledConfig.getConfigValue()) : false);
+        result.put("targetEmail", emailConfig != null ? emailConfig.getConfigValue() : "");
+
+        return ResponseEntity.ok(result);
+    }
+
+    /**
+     * 更新反馈配置
+     */
+    @PutMapping("/feedback-config")
+    public ResponseEntity<?> updateFeedbackConfig(@RequestBody Map<String, Object> body) {
+        if (!checkAdmin()) {
+            return ResponseEntity.status(403).body(Map.of("error", "无权限，仅管理员可操作"));
+        }
+
+        // 更新启用状态
+        if (body.containsKey("enabled")) {
+            SystemConfig config = systemConfigMapper.selectByKey("feedback.enabled");
+            if (config != null) {
+                config.setConfigValue(Boolean.TRUE.equals(body.get("enabled")) ? "true" : "false");
+                systemConfigMapper.updateValue(config);
+            }
+        }
+
+        // 更新目标邮箱
+        if (body.containsKey("targetEmail")) {
+            SystemConfig config = systemConfigMapper.selectByKey("feedback.target_email");
+            if (config != null) {
+                config.setConfigValue((String) body.get("targetEmail"));
+                systemConfigMapper.updateValue(config);
+            }
+        }
+
+        return ResponseEntity.ok(Map.of("message", "反馈配置已更新"));
+    }
+
+    /**
+     * 检查当前用户是否是管理员
+     */
+    private boolean checkAdmin() {
+        if (!StpUtil.isLogin()) {
+            return false;
+        }
+        Integer currentUserId = StpUtil.getLoginIdAsInt();
+        User currentUser = userMapper.selectByPrimaryKey(currentUserId);
+        return currentUser != null && "admin".equals(currentUser.getRole());
     }
 }

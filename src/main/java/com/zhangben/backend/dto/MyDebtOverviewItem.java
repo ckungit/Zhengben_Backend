@@ -11,8 +11,9 @@ public class MyDebtOverviewItem {
     private String creditorName;
     private String creditorAvatarUrl;
     private Long totalAmount;
+    private Long pendingAmount; // V32: 待确认的还款金额
     private List<CreditorDebtDetailItem> details;
-    
+
     // 债权人支持的收款方式
     private Boolean paypaySupported;
     private Boolean bankSupported;
@@ -47,6 +48,14 @@ public class MyDebtOverviewItem {
 
     public void setTotalAmount(Long totalAmount) {
         this.totalAmount = totalAmount;
+    }
+
+    public Long getPendingAmount() {
+        return pendingAmount;
+    }
+
+    public void setPendingAmount(Long pendingAmount) {
+        this.pendingAmount = pendingAmount;
     }
 
     public List<CreditorDebtDetailItem> getDetails() {

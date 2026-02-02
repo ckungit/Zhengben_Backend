@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhangben.backend.mapper.NotificationMapper">
+  <resultMap id="BaseResultMap" type="com.zhangben.backend.model.Notification">
+    <id column="id" jdbcType="BIGINT" property="id" />
+    <result column="user_id" jdbcType="INTEGER" property="userId" />
+    <result column="type" jdbcType="VARCHAR" property="type" />
+    <result column="title" jdbcType="VARCHAR" property="title" />
+    <result column="content" jdbcType="VARCHAR" property="content" />
+    <result column="related_id" jdbcType="BIGINT" property="relatedId" />
+    <result column="related_type" jdbcType="VARCHAR" property="relatedType" />
+    <result column="is_read" jdbcType="TINYINT" property="isRead" />
+    <result column="created_at" jdbcType="TIMESTAMP" property="createdAt" />
+  </resultMap>
+
+  <sql id="Base_Column_List">
+    id, user_id, type, title, content, related_id, related_type, is_read, created_at
+  </sql>
+
+  <insert id="insert" parameterType="com.zhangben.backend.model.Notification" useGeneratedKeys="true" keyProperty="id">
+    insert into notification (user_id, type, title, content, related_id, related_type, is_read, created_at)
+    values (#{userId,jdbcType=INTEGER}, #{type,jdbcType=VARCHAR}, #{title,jdbcType=VARCHAR},
+            #{content,jdbcType=VARCHAR}, #{relatedId,jdbcType=BIGINT}, #{relatedType,jdbcType=VARCHAR},
+            #{isRead,jdbcType=TINYINT}, #{createdAt,jdbcType=TIMESTAMP})
+  </insert>
+
+  <insert id="insertSelective" parameterType="com.zhangben.backend.model.Notification" useGeneratedKeys="true" keyProperty="id">
+    insert into notification
+    <trim prefix="(" suffix=")" suffixOverrides=",">
+      <if test="userId != null">user_id,</if>
+      <if test="type != null">type,</if>
+      <if test="title != null">title,</if>
+      <if test="content != null">content,</if>
+      <if test="relatedId != null">related_id,</if>
+      <if test="relatedType != null">related_type,</if>
+      <if test="isRead != null">is_read,</if>
+      <if test="createdAt != null">created_at,</if>
+    </trim>
+    <trim prefix="values (" suffix=")" suffixOverrides=",">
+      <if test="userId != null">#{userId,jdbcType=INTEGER},</if>
+      <if test="type != null">#{type,jdbcType=VARCHAR},</if>
+      <if test="title != null">#{title,jdbcType=VARCHAR},</if>
+      <if test="content != null">#{content,jdbcType=VARCHAR},</if>
+      <if test="relatedId != null">#{relatedId,jdbcType=BIGINT},</if>
+      <if test="relatedType != null">#{relatedType,jdbcType=VARCHAR},</if>
+      <if test="isRead != null">#{isRead,jdbcType=TINYINT},</if>
+      <if test="createdAt != null">#{createdAt,jdbcType=TIMESTAMP},</if>
+    </trim>
+  </insert>
+
+  <select id="selectByPrimaryKey" parameterType="java.lang.Long" resultMap="BaseResultMap">
+    select <include refid="Base_Column_List" />
+    from notification
+    where id = #{id,jdbcType=BIGINT}
+  </select>
+
+  <select id="selectByUserId" resultMap="BaseResultMap">
+    select <include refid="Base_Column_List" />
+    from notification
+    where user_id = #{userId}
+    order by created_at desc
+    <if test="limit != null">
+      limit #{limit}
+    </if>
+  </select>
+
+  <select id="selectUnreadByUserId" resultMap="BaseResultMap">
+    select <include refid="Base_Column_List" />
+    from notification
+    where user_id = #{userId} and is_read = 0
+    order by created_at desc
+  </select>
+
+  <select id="countUnreadByUserId" resultType="java.lang.Integer">
+    select count(*) from notification
+    where user_id = #{userId} and is_read = 0
+  </select>
+
+  <update id="markAsRead">
+    update notification set is_read = 1 where id = #{id}
+  </update>
+
+  <update id="markAllAsRead">
+    update notification set is_read = 1 where user_id = #{userId} and is_read = 0
+  </update>
+
+  <delete id="deleteByPrimaryKey" parameterType="java.lang.Long">
+    delete from notification where id = #{id,jdbcType=BIGINT}
+  </delete>
+</mapper>

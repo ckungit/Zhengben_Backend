@@ -1,30 +1,27 @@
 package com.zhangben.backend.service;
 
-import com.zhangben.backend.mapper.EmailTemplateMapper;
 import com.zhangben.backend.mapper.UserMapper;
-import com.zhangben.backend.model.EmailTemplate;
 import com.zhangben.backend.model.User;
 import com.zhangben.backend.model.UserExample;
+import com.zhangben.backend.service.email.EmailProviderManager;
+import com.zhangben.backend.service.email.EmailResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import sendinblue.ApiClient;
-import sendinblue.Configuration;
-import sendinblue.auth.ApiKeyAuth;
-import sibApi.TransactionalEmailsApi;
-import sibModel.SendSmtpEmail;
-import sibModel.SendSmtpEmailSender;
-import sibModel.SendSmtpEmailTo;
 
-import jakarta.annotation.PostConstruct;
 import java.time.Year;
 import java.util.*;
 
 /**
- * 邮件服务 - 使用 Brevo SDK 发送邮件
- * 模板使用 EmailTemplateService 渲染
+ * V34: 邮件服务 - 重构为使用 EmailProviderManager
+ *
+ * 功能特性：
+ * 1. 多供应商支持（Brevo、Resend、Mock）
+ * 2. 自动降级机制
+ * 3. 完全容错，不影响系统启动
+ * 4. 异步发送，不阻塞业务流程
  */
 @Service
 public class EmailService {
@@ -40,7 +37,7 @@ public class EmailService {
     public static final String DEFAULT_LANGUAGE = "zh-CN";
 
     @Autowired
-    private EmailTemplateMapper emailTemplateMapper;
+    private EmailProviderManager providerManager;
 
     @Autowired
     private EmailTemplateService templateService;
@@ -48,38 +45,11 @@ public class EmailService {
     @Autowired
     private UserMapper userMapper;
 
-    @Value("${brevo.api-key:}")
-    private String brevoApiKey;
-
-    @Value("${brevo.sender-email:noreply@aabillpay.com}")
-    private String senderEmail;
-
     @Value("${brevo.sender-name:Pay友}")
     private String senderName;
 
     @Value("${app.base-url:https://www.aabillpay.com}")
     private String baseUrl;
-
-    private TransactionalEmailsApi emailApi;
-    private boolean initialized = false;
-
-    @PostConstruct
-    public void init() {
-        if (brevoApiKey != null && !brevoApiKey.isEmpty() && !"no_use_email".equals(brevoApiKey)) {
-            try {
-                ApiClient defaultClient = Configuration.getDefaultApiClient();
-                ApiKeyAuth apiKey = (ApiKeyAuth) defaultClient.getAuthentication("api-key");
-                apiKey.setApiKey(brevoApiKey);
-                emailApi = new TransactionalEmailsApi();
-                initialized = true;
-                logger.info("Brevo 邮件服务初始化成功");
-            } catch (Exception e) {
-                logger.error("Brevo 邮件服务初始化失败: {}", e.getMessage());
-            }
-        } else {
-            logger.warn("Brevo API Key 未配置，邮件服务不可用");
-        }
-    }
 
     /**
      * 获取用户的语言偏好
@@ -135,46 +105,42 @@ public class EmailService {
 
     /**
      * 发送账单通知邮件（异步，失败不影响业务）
-     * @param toEmail 收件人邮箱
-     * @param toName 收件人昵称
-     * @param language 用户首选语言
-     * @param creatorName 账单创建者昵称
-     * @param amount 金额（分）
-     * @param perAmount 人均金额（分）
-     * @param comment 备注
-     * @param styleName 分类名称
-     * @param activityName 活动名称（可选）
-     * @param isUpdate 是否是更新通知
      */
     public void sendBillNotificationAsync(String toEmail, String toName, String language,
                                           String creatorName, Long amount, Long perAmount,
                                           String comment, String styleName, String activityName,
                                           boolean isUpdate) {
-        // 异步发送，失败不影响业务
-        new Thread(() -> {
-            try {
-                String lang = language != null ? language : DEFAULT_LANGUAGE;
+        // 检查邮件功能是否启用
+        if (!providerManager.isMailEnabled()) {
+            logger.debug("【邮件服务】mail.enabled=false，跳过账单通知: {}", toEmail);
+            return;
+        }
 
-                Map<String, Object> variables = new HashMap<>();
-                variables.put("recipientName", toName != null ? toName : "用户");
-                variables.put("creatorName", creatorName != null ? creatorName : "某用户");
-                variables.put("amount", String.format("%.2f", amount / 100.0));
-                variables.put("perAmount", String.format("%.2f", perAmount / 100.0));
-                variables.put("styleName", styleName != null ? styleName : "未分类");
-                variables.put("comment", comment);
-                variables.put("activityName", activityName);
-                variables.put("isUpdate", isUpdate);
-                variables.put("loginUrl", baseUrl + "/login");
-                variables.put("year", String.valueOf(Year.now().getValue()));
+        // 构建变量
+        String lang = language != null ? language : DEFAULT_LANGUAGE;
+        Map<String, Object> variables = new HashMap<>();
+        variables.put("recipientName", toName != null ? toName : "用户");
+        variables.put("creatorName", creatorName != null ? creatorName : "某用户");
+        variables.put("amount", String.format("%.2f", amount / 100.0));
+        variables.put("perAmount", String.format("%.2f", perAmount / 100.0));
+        variables.put("styleName", styleName != null ? styleName : "未分类");
+        variables.put("comment", comment);
+        variables.put("activityName", activityName);
+        variables.put("isUpdate", isUpdate);
+        variables.put("loginUrl", baseUrl + "/login");
+        variables.put("year", String.valueOf(Year.now().getValue()));
 
-                boolean success = sendEmailWithTemplate(toEmail, toName, TEMPLATE_BILL_NOTIFICATION, lang, variables);
-                if (!success) {
-                    logger.warn("账单通知邮件发送失败: {}", toEmail);
-                }
-            } catch (Exception e) {
-                logger.error("发送账单通知邮件异常 [{}]: {}", toEmail, e.getMessage());
-            }
-        }).start();
+        // 渲染模板
+        String htmlContent = templateService.renderTemplate(TEMPLATE_BILL_NOTIFICATION, lang, variables);
+        String subject = templateService.renderSubject(TEMPLATE_BILL_NOTIFICATION, lang, variables);
+
+        if (htmlContent == null) {
+            logger.warn("账单通知邮件模板渲染失败: {}", toEmail);
+            return;
+        }
+
+        // 异步发送（Fire-and-forget）
+        providerManager.sendEmailFireAndForget(toEmail, toName, subject, htmlContent);
     }
 
     /**
@@ -195,12 +161,12 @@ public class EmailService {
     }
 
     /**
-     * 使用数据库模板发送邮件（兼容旧接口，使用 String 变量）
-     * @deprecated 推荐使用 sendEmailWithTemplate(String, String, String, String, Map<String, Object>)
+     * 使用数据库模板发送邮件（兼容旧接口）
+     * @deprecated 推荐使用 sendEmailWithTemplate(String, String, String, String, Map)
      */
     @Deprecated
-    public boolean sendEmailWithTemplate(String toEmail, String toName, String templateCode, Map<String, String> variables) {
-        // 转换为 Object 类型的 Map
+    public boolean sendEmailWithTemplate(String toEmail, String toName, String templateCode,
+                                         Map<String, String> variables) {
         Map<String, Object> objectVariables = new HashMap<>();
         if (variables != null) {
             objectVariables.putAll(variables);
@@ -210,41 +176,15 @@ public class EmailService {
 
     /**
      * 发送邮件（核心方法）
+     * 使用 EmailProviderManager 实现自动降级
      */
     public boolean sendEmail(String toEmail, String toName, String subject, String htmlContent) {
-        if (!initialized) {
-            logger.warn("邮件服务未初始化，跳过发送邮件到: {}", toEmail);
-            return false;
-        }
-
         try {
-            SendSmtpEmail email = new SendSmtpEmail();
-
-            // 发件人
-            SendSmtpEmailSender sender = new SendSmtpEmailSender();
-            sender.setName(senderName);
-            sender.setEmail(senderEmail);
-            email.setSender(sender);
-
-            // 收件人
-            SendSmtpEmailTo recipient = new SendSmtpEmailTo();
-            recipient.setEmail(toEmail);
-            if (toName != null && !toName.isEmpty()) {
-                recipient.setName(toName);
-            }
-            email.setTo(Collections.singletonList(recipient));
-
-            // 主题和内容
-            email.setSubject(subject);
-            email.setHtmlContent(htmlContent);
-
-            // 发送
-            emailApi.sendTransacEmail(email);
-            logger.info("邮件发送成功: {} -> {}", subject, toEmail);
-            return true;
-
+            EmailResult result = providerManager.sendEmail(toEmail, toName, subject, htmlContent);
+            return result.isSuccess();
         } catch (Exception e) {
-            logger.error("邮件发送失败 [{}]: {}", toEmail, e.getMessage());
+            // 捕获所有异常，确保不影响业务
+            logger.error("【邮件服务】发送异常 [{}]: {}", toEmail, e.getMessage());
             return false;
         }
     }
@@ -253,6 +193,28 @@ public class EmailService {
      * 检查邮件服务是否可用
      */
     public boolean isAvailable() {
-        return initialized;
+        return providerManager.isMailEnabled() &&
+               providerManager.getAvailableProvider().isAvailable();
+    }
+
+    /**
+     * 检查邮件功能是否启用
+     */
+    public boolean isEnabled() {
+        return providerManager.isMailEnabled();
+    }
+
+    /**
+     * 获取当前使用的供应商名称
+     */
+    public String getCurrentProvider() {
+        return providerManager.getAvailableProvider().getProviderName();
+    }
+
+    /**
+     * 获取所有供应商的状态
+     */
+    public Map<String, Boolean> getProviderStatus() {
+        return providerManager.getProviderStatus();
     }
 }

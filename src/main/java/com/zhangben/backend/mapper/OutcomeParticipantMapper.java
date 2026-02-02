@@ -93,4 +93,14 @@ public interface OutcomeParticipantMapper {
      * @mbg.generated Fri Jan 23 12:54:27 JST 2026
      */
     int updateByPrimaryKey(OutcomeParticipant row);
+
+    /**
+     * 查询待确认的还款记录（当前用户作为债权人）
+     */
+    List<OutcomeParticipant> selectPendingConfirmations(@Param("creditorId") Integer creditorId);
+
+    /**
+     * 根据还款ID和债权人ID查询参与记录
+     */
+    OutcomeParticipant selectByOutcomeAndUser(@Param("outcomeId") Integer outcomeId, @Param("userId") Integer userId);
 }

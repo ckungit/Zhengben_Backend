@@ -1,6 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.zhangben.backend.mapper.PayStyleMapper">
+  <!-- 本地化查询：根据用户语言返回对应的分类名称 -->
+  <select id="selectAllLocalized" resultMap="BaseResultMap">
+    SELECT
+      ps.id,
+      COALESCE(psi.display_name, ps.style_name) AS style_name,
+      ps.parent_style_id,
+      ps.created_at,
+      ps.updated_at
+    FROM pay_style ps
+    LEFT JOIN pay_style_i18n psi ON ps.id = psi.style_id AND psi.language = #{language}
+    ORDER BY ps.id ASC
+  </select>
+
   <resultMap id="BaseResultMap" type="com.zhangben.backend.model.PayStyle">
     <!--
       WARNING - @mbg.generated

@@ -18,20 +18,27 @@
         ORDER BY month
     </select>
 
-    <!-- 分类统计 -->
+    <!-- 分类统计（本地化） -->
     <select id="getCategoryStats" resultType="map">
         SELECT
-            COALESCE(s.style_name, '其他') as category,
+            COALESCE(psi.display_name, s.style_name,
+                CASE #{language}
+                    WHEN 'en-US' THEN 'Other'
+                    WHEN 'ja-JP' THEN 'その他'
+                    ELSE '其他'
+                END
+            ) as category,
             SUM(o.per_amount) as totalAmount,
             COUNT(*) as count
         FROM outcome o
         INNER JOIN outcome_participant p ON o.id = p.outcome_id
         LEFT JOIN pay_style s ON o.style_id = s.id
+        LEFT JOIN pay_style_i18n psi ON s.id = psi.style_id AND psi.language = #{language}
         WHERE p.user_id = #{userId}
             AND o.deleted_flag = 0
             AND o.repay_flag = 1
             AND o.pay_datetime >= DATE_SUB(CURDATE(), INTERVAL #{months} MONTH)
-        GROUP BY o.style_id, s.style_name
+        GROUP BY o.style_id, COALESCE(psi.display_name, s.style_name)
         ORDER BY totalAmount DESC
     </select>
 

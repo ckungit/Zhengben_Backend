@@ -133,13 +133,6 @@
 		    <version>2.25.16</version>
 		</dependency>
 
-		<!-- V25: Lombok - 简化实体类代码 -->
-		<dependency>
-		    <groupId>org.projectlombok</groupId>
-		    <artifactId>lombok</artifactId>
-		    <optional>true</optional>
-		</dependency>
-
 		<!-- V25: Hutool - 强大的 Java 工具库 -->
 		<dependency>
 		    <groupId>cn.hutool</groupId>

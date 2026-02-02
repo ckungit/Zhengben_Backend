@@ -3,6 +3,7 @@ package com.zhangben.backend.config;
 import cn.dev33.satoken.exception.NotLoginException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -10,6 +11,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -62,16 +64,75 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * 处理SQL异常 - 不暴露数据库错误详情
+     */
+    @ExceptionHandler(SQLException.class)
+    public ResponseEntity<Map<String, Object>> handleSQLException(SQLException e) {
+        Map<String, Object> result = new HashMap<>();
+        result.put("code", 500);
+        result.put("message", "数据操作失败，请稍后重试");
+        // 记录完整SQL错误用于调试，但不返回给前端
+        logger.error("SQL异常: ", e);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(result);
+    }
+
+    /**
+     * 处理Spring数据访问异常 - 不暴露数据库错误详情
+     */
+    @ExceptionHandler(DataAccessException.class)
+    public ResponseEntity<Map<String, Object>> handleDataAccessException(DataAccessException e) {
+        Map<String, Object> result = new HashMap<>();
+        result.put("code", 500);
+        result.put("message", "数据操作失败，请稍后重试");
+        // 记录完整错误用于调试，但不返回给前端
+        logger.error("数据访问异常: ", e);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(result);
+    }
+
+    /**
      * 处理业务异常 - RuntimeException
+     * 过滤敏感信息，防止SQL等内部错误泄露
      */
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<Map<String, Object>> handleRuntimeException(RuntimeException e) {
         Map<String, Object> result = new HashMap<>();
         result.put("code", 400);
-        result.put("message", e.getMessage());
-        // 只记录日志，不打印完整堆栈
-        logger.warn("业务异常: {}", e.getMessage());
+
+        String message = e.getMessage();
+        // 检查是否包含敏感信息（SQL、堆栈跟踪等）
+        if (message != null && containsSensitiveInfo(message)) {
+            result.put("message", "操作失败，请稍后重试");
+            logger.error("业务异常（包含敏感信息）: ", e);
+        } else {
+            result.put("message", message != null ? message : "操作失败");
+            logger.warn("业务异常: {}", message);
+        }
+
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(result);
+    }
+
+    /**
+     * 检查消息是否包含敏感信息
+     */
+    private boolean containsSensitiveInfo(String message) {
+        if (message == null) return false;
+        String lowerMsg = message.toLowerCase();
+        return lowerMsg.contains("sql")
+            || lowerMsg.contains("jdbc")
+            || lowerMsg.contains("mybatis")
+            || lowerMsg.contains("hibernate")
+            || lowerMsg.contains("database")
+            || lowerMsg.contains("table")
+            || lowerMsg.contains("column")
+            || lowerMsg.contains("insert")
+            || lowerMsg.contains("update")
+            || lowerMsg.contains("delete")
+            || lowerMsg.contains("select")
+            || lowerMsg.contains("exception")
+            || lowerMsg.contains("stacktrace")
+            || lowerMsg.contains("at com.")
+            || lowerMsg.contains("at org.")
+            || lowerMsg.contains("at java.");
     }
 
     /**

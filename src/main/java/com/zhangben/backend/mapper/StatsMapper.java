@@ -11,7 +11,7 @@ public interface StatsMapper {
     
     List<Map<String, Object>> getMonthlyStats(@Param("userId") Integer userId, @Param("months") Integer months);
     
-    List<Map<String, Object>> getCategoryStats(@Param("userId") Integer userId, @Param("months") Integer months);
+    List<Map<String, Object>> getCategoryStats(@Param("userId") Integer userId, @Param("months") Integer months, @Param("language") String language);
     
     List<Map<String, Object>> getPartnerStats(@Param("userId") Integer userId, @Param("months") Integer months);
     

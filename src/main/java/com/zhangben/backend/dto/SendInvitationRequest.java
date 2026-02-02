@@ -2,13 +2,10 @@ package com.zhangben.backend.dto;
 
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
-import lombok.Data;
 
 /**
  * V25: 发送活动邀请请求 DTO
- * 使用 Jakarta Validation 进行参数校验
  */
-@Data
 public class SendInvitationRequest {
 
     @NotNull(message = "活动ID不能为空")
@@ -19,4 +16,28 @@ public class SendInvitationRequest {
 
     @Size(max = 200, message = "邀请留言最多200字")
     private String message;
+
+    public Integer getActivityId() {
+        return activityId;
+    }
+
+    public void setActivityId(Integer activityId) {
+        this.activityId = activityId;
+    }
+
+    public Integer getInviteeId() {
+        return inviteeId;
+    }
+
+    public void setInviteeId(Integer inviteeId) {
+        this.inviteeId = inviteeId;
+    }
+
+    public String getMessage() {
+        return message;
+    }
+
+    public void setMessage(String message) {
+        this.message = message;
+    }
 }

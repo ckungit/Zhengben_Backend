@@ -4,7 +4,9 @@ import cn.dev33.satoken.stp.StpUtil;
 import com.zhangben.backend.mapper.ActivityMapper;
 import com.zhangben.backend.mapper.ActivityMemberMapper;
 import com.zhangben.backend.mapper.OutcomeMapper;
+import com.zhangben.backend.mapper.UserMapper;
 import com.zhangben.backend.model.Activity;
+import com.zhangben.backend.model.User;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -22,6 +24,20 @@ public class ActivityController {
 
     @Autowired
     private OutcomeMapper outcomeMapper;
+
+    @Autowired
+    private UserMapper userMapper;
+
+    /**
+     * 获取用户的语言偏好，默认中文
+     */
+    private String getUserLanguage(Integer userId) {
+        User user = userMapper.selectByPrimaryKey(userId);
+        if (user != null && user.getPreferredLanguage() != null && !user.getPreferredLanguage().isEmpty()) {
+            return user.getPreferredLanguage();
+        }
+        return "zh-CN";
+    }
 
     /**
      * 创建活动
@@ -150,7 +166,7 @@ public class ActivityController {
             throw new RuntimeException("你不是该活动的成员");
         }
 
-        return outcomeMapper.selectByActivityId(id);
+        return outcomeMapper.selectByActivityId(id, getUserLanguage(userId));
     }
 
     /**
@@ -168,7 +184,7 @@ public class ActivityController {
         }
 
         // 检查账单是否属于该活动
-        List<Map<String, Object>> outcomes = outcomeMapper.selectByActivityId(id);
+        List<Map<String, Object>> outcomes = outcomeMapper.selectByActivityId(id, getUserLanguage(userId));
         boolean found = outcomes.stream().anyMatch(o -> {
             Object idObj = o.get("id");
             if (idObj instanceof Number) {

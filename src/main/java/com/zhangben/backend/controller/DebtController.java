@@ -76,4 +76,42 @@ public class DebtController {
         Integer userId = StpUtil.getLoginIdAsInt();
         return debtService.getMyDebtOverview(userId);
     }
+
+    /**
+     * V30: 获取待确认的还款列表（作为债权人）
+     */
+    @GetMapping("/pending-repayments")
+    public List<PendingRepaymentItem> getPendingRepayments() {
+        Integer userId = StpUtil.getLoginIdAsInt();
+        return debtService.getPendingRepayments(userId);
+    }
+
+    /**
+     * V30: 确认单笔还款
+     */
+    @PostMapping("/repayment/{id}/confirm")
+    public String confirmRepayment(@PathVariable("id") Integer repaymentId) {
+        Integer userId = StpUtil.getLoginIdAsInt();
+        debtService.confirmRepayment(repaymentId, userId);
+        return "确认成功";
+    }
+
+    /**
+     * V30: 批量确认还款
+     */
+    @PostMapping("/repayments/batch-confirm")
+    public String batchConfirmRepayments(@RequestBody List<Integer> repaymentIds) {
+        Integer userId = StpUtil.getLoginIdAsInt();
+        debtService.batchConfirmRepayments(repaymentIds, userId);
+        return "批量确认成功";
+    }
+
+    /**
+     * V32: 获取我发起的待确认还款（作为债务人）
+     */
+    @GetMapping("/my-pending-repayments")
+    public List<MyPendingRepaymentItem> getMyPendingRepayments() {
+        Integer userId = StpUtil.getLoginIdAsInt();
+        return debtService.getMyPendingRepayments(userId);
+    }
 }

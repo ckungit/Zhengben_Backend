@@ -120,9 +120,11 @@ public interface OutcomeMapper {
     int updateByPrimaryKey(Outcome row);
 
     /**
-     * 根据活动ID查询账单列表
+     * 根据活动ID查询账单列表（本地化）
+     * @param activityId 活动ID
+     * @param language 语言代码 (zh-CN, en-US, ja-JP)
      */
-    List<Map<String, Object>> selectByActivityId(@Param("activityId") Integer activityId);
+    List<Map<String, Object>> selectByActivityId(@Param("activityId") Integer activityId, @Param("language") String language);
 
     /**
      * 软删除账单

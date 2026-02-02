@@ -1,14 +1,17 @@
 package com.zhangben.backend.service.impl;
 
 import com.zhangben.backend.dto.*;
+import com.zhangben.backend.mapper.NotificationMapper;
 import com.zhangben.backend.mapper.OutcomeMapper;
 import com.zhangben.backend.mapper.OutcomeParticipantMapper;
 import com.zhangben.backend.mapper.PayStyleMapper;
 import com.zhangben.backend.mapper.UserMapper;
 import com.zhangben.backend.model.*;
 import com.zhangben.backend.service.DebtService;
+import com.zhangben.backend.service.EmailService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -27,6 +30,12 @@ public class DebtServiceImpl implements DebtService {
 
     @Autowired
     private PayStyleMapper payStyleMapper;
+
+    @Autowired
+    private NotificationMapper notificationMapper;
+
+    @Autowired
+    private EmailService emailService;
 
     /**
      * 使用 Example 查询所有未删除的 outcome
@@ -80,13 +89,21 @@ public class DebtServiceImpl implements DebtService {
             }
 
             // repay_flag = 2 → 还款
+            // V30: 只有已确认的还款才计入
             if (o.getRepayFlag() == (byte) 2) {
 
                 Integer debtor = o.getPayerUserid();
                 Integer creditor = o.getTargetUserid();
 
-                String key = debtor + "-" + creditor;
-                map.put(key, map.getOrDefault(key, 0L) - o.getAmount());
+                // 检查还款是否已确认
+                OutcomeParticipant participant = outcomeParticipantMapper.selectByOutcomeAndUser(o.getId(), creditor);
+                boolean isConfirmed = participant != null && participant.getConfirmStatus() != null && participant.getConfirmStatus() == 1;
+
+                // 只有已确认的还款才计入
+                if (isConfirmed) {
+                    String key = debtor + "-" + creditor;
+                    map.put(key, map.getOrDefault(key, 0L) - o.getAmount());
+                }
             }
         }
 
@@ -265,11 +282,13 @@ public class DebtServiceImpl implements DebtService {
     }
 
     @Override
+    @Transactional
     public void repay(RepayRequest req, Integer currentUserId) {
 
         Outcome o = new Outcome();
         o.setAmount(req.getAmount());
         o.setPayerUserid(currentUserId);
+        o.setCreatorId(currentUserId); // V29: 设置创建者
         o.setTargetUserid(req.getCreditorId());
         o.setRepayFlag((byte) 2);
         o.setPerAmount(req.getAmount());
@@ -283,6 +302,54 @@ public class DebtServiceImpl implements DebtService {
         o.setPayDatetime(payTime);
 
         outcomeMapper.insertSelective(o);
+
+        // V30: 为还款创建参与者记录，状态为待确认
+        OutcomeParticipant participant = new OutcomeParticipant();
+        participant.setOutcomeId(o.getId());
+        participant.setUserId(req.getCreditorId());
+        participant.setShares(1);
+        participant.setConfirmStatus((byte) 0); // 待确认
+        outcomeParticipantMapper.insertSelective(participant);
+
+        // V31: 发送通知给债权人（站内信）
+        User debtor = userMapper.selectByPrimaryKey(currentUserId);
+        User creditor = userMapper.selectByPrimaryKey(req.getCreditorId());
+
+        try {
+            Notification notification = new Notification();
+            notification.setUserId(req.getCreditorId());
+            notification.setType("repayment_received");
+            notification.setTitle(debtor.getNickname() + " 向你还款");
+            notification.setContent("金额: ¥" + String.format("%.2f", req.getAmount() / 100.0) + (req.getComment() != null ? " - " + req.getComment() : "") + "。请确认收款。");
+            notification.setRelatedId(Long.valueOf(o.getId()));
+            notification.setRelatedType("repayment");
+            notification.setIsRead((byte) 0);
+            notification.setCreatedAt(LocalDateTime.now());
+            notificationMapper.insertSelective(notification);
+        } catch (Exception e) {
+            // 站内信发送失败不影响业务
+        }
+
+        // V32: 发送邮件通知给债权人（异步，失败不影响业务）- 提醒确认收款
+        try {
+            if (creditor != null && creditor.getEmail() != null) {
+                String language = creditor.getPreferredLanguage() != null ? creditor.getPreferredLanguage() : "zh-CN";
+                emailService.sendBillNotificationAsync(
+                    creditor.getEmail(),
+                    creditor.getNickname(),
+                    language,
+                    debtor.getNickname(),
+                    req.getAmount(),
+                    req.getAmount(), // perAmount 等于 amount
+                    "收到还款，请确认: " + (req.getComment() != null ? req.getComment() : ""),
+                    "待确认还款",
+                    null,
+                    false
+                );
+            }
+        } catch (Exception e) {
+            // 邮件发送失败不影响业务
+        }
     }
 
     @Override
@@ -442,6 +509,7 @@ public class DebtServiceImpl implements DebtService {
             item.setBankSupported(creditor.getBankFlag() != null && creditor.getBankFlag() == 1);
 
             List<CreditorDebtDetailItem> details = new ArrayList<>();
+            long pendingAmount = 0L; // V32: 累计待确认金额
 
             for (Outcome o : all) {
 
@@ -490,11 +558,29 @@ public class DebtServiceImpl implements DebtService {
                         d.setPayDatetime(o.getPayDatetime());
                         d.setCategoryName("还款");
                         d.setLocationText("无");
+                        d.setIsRepayment(true);
+
+                        // V32: 获取还款确认状态
+                        OutcomeParticipant repayParticipant = outcomeParticipantMapper.selectByOutcomeAndUser(o.getId(), creditorId);
+                        if (repayParticipant != null) {
+                            int status = repayParticipant.getConfirmStatus() != null ? repayParticipant.getConfirmStatus().intValue() : 0;
+                            d.setConfirmStatus(status);
+                            // V32: 累计待确认金额
+                            if (status == 0) {
+                                pendingAmount += o.getAmount();
+                            }
+                        } else {
+                            d.setConfirmStatus(0); // 默认待确认
+                            pendingAmount += o.getAmount();
+                        }
 
                         details.add(d);
                     }
                 }
             }
+
+            // V32: 设置待确认金额
+            item.setPendingAmount(pendingAmount);
 
             // V19: 如果有互相欠款，添加抵消记录
             String reverseKey = creditorId + "-" + userId; // 对方欠我的金额
@@ -515,5 +601,165 @@ public class DebtServiceImpl implements DebtService {
         }
 
         return list;
+    }
+
+    @Override
+    public List<PendingRepaymentItem> getPendingRepayments(Integer creditorId) {
+        List<PendingRepaymentItem> result = new ArrayList<>();
+
+        // 查询所有待确认的还款记录
+        List<OutcomeParticipant> pendingParticipants = outcomeParticipantMapper.selectPendingConfirmations(creditorId);
+
+        for (OutcomeParticipant p : pendingParticipants) {
+            Outcome repayment = outcomeMapper.selectByPrimaryKey(p.getOutcomeId());
+            if (repayment == null || repayment.getDeletedFlag() == 1) {
+                continue;
+            }
+
+            User debtor = userMapper.selectByPrimaryKey(repayment.getPayerUserid());
+            if (debtor == null) {
+                continue;
+            }
+
+            PendingRepaymentItem item = new PendingRepaymentItem();
+            item.setRepaymentId(repayment.getId());
+            item.setDebtorId(debtor.getId());
+            item.setDebtorName(debtor.getNickname());
+            item.setDebtorAvatarUrl(debtor.getAvatarUrl());
+            item.setAmount(repayment.getAmount());
+            item.setComment(repayment.getComment());
+            item.setPayDatetime(repayment.getPayDatetime());
+
+            result.add(item);
+        }
+
+        return result;
+    }
+
+    @Override
+    @Transactional
+    public void confirmRepayment(Integer repaymentId, Integer creditorId) {
+        // 查询还款记录
+        Outcome repayment = outcomeMapper.selectByPrimaryKey(repaymentId);
+        if (repayment == null || repayment.getDeletedFlag() == 1) {
+            throw new IllegalArgumentException("还款记录不存在");
+        }
+
+        // 检查是否是该债权人的还款
+        if (!repayment.getTargetUserid().equals(creditorId)) {
+            throw new IllegalArgumentException("无权确认此还款");
+        }
+
+        // 查询并更新参与者记录
+        OutcomeParticipant participant = outcomeParticipantMapper.selectByOutcomeAndUser(repaymentId, creditorId);
+        if (participant == null) {
+            throw new IllegalArgumentException("还款参与记录不存在");
+        }
+
+        if (participant.getConfirmStatus() != null && participant.getConfirmStatus() == 1) {
+            throw new IllegalArgumentException("该还款已确认");
+        }
+
+        // 更新确认状态
+        participant.setConfirmStatus((byte) 1);
+        participant.setConfirmedAt(LocalDateTime.now());
+        participant.setConfirmedBy(creditorId);
+        outcomeParticipantMapper.updateByPrimaryKeySelective(participant);
+
+        // V31: 发送确认通知给还款人（站内信）
+        User creditor = userMapper.selectByPrimaryKey(creditorId);
+        User debtor = userMapper.selectByPrimaryKey(repayment.getPayerUserid());
+
+        try {
+            Notification notification = new Notification();
+            notification.setUserId(repayment.getPayerUserid());
+            notification.setType("repayment_confirmed");
+            notification.setTitle(creditor.getNickname() + " 确认收到还款");
+            notification.setContent("金额: ¥" + String.format("%.2f", repayment.getAmount() / 100.0));
+            notification.setRelatedId(Long.valueOf(repaymentId));
+            notification.setRelatedType("repayment");
+            notification.setIsRead((byte) 0);
+            notification.setCreatedAt(LocalDateTime.now());
+            notificationMapper.insertSelective(notification);
+        } catch (Exception e) {
+            // 站内信发送失败不影响业务
+        }
+
+        // V32: 发送确认邮件给还款人（异步，失败不影响业务）
+        try {
+            if (debtor != null && debtor.getEmail() != null) {
+                String language = debtor.getPreferredLanguage() != null ? debtor.getPreferredLanguage() : "zh-CN";
+                emailService.sendBillNotificationAsync(
+                    debtor.getEmail(),
+                    debtor.getNickname(),
+                    language,
+                    creditor.getNickname(),
+                    repayment.getAmount(),
+                    repayment.getAmount(), // perAmount 等于 amount
+                    "还款确认通知: " + (repayment.getComment() != null ? repayment.getComment() : "还款已确认"),
+                    "还款确认",
+                    null,
+                    false // 不是更新通知
+                );
+            }
+        } catch (Exception e) {
+            // 邮件发送失败不影响业务
+        }
+    }
+
+    @Override
+    @Transactional
+    public void batchConfirmRepayments(List<Integer> repaymentIds, Integer creditorId) {
+        for (Integer repaymentId : repaymentIds) {
+            try {
+                confirmRepayment(repaymentId, creditorId);
+            } catch (IllegalArgumentException e) {
+                // 跳过无效的还款ID，继续处理其他的
+            }
+        }
+    }
+
+    @Override
+    public List<MyPendingRepaymentItem> getMyPendingRepayments(Integer debtorId) {
+        List<MyPendingRepaymentItem> result = new ArrayList<>();
+
+        // 查询我发起的所有还款记录
+        OutcomeExample example = new OutcomeExample();
+        example.createCriteria()
+            .andPayerUseridEqualTo(debtorId)
+            .andRepayFlagEqualTo((byte) 2)
+            .andDeletedFlagEqualTo((byte) 0);
+        example.setOrderByClause("pay_datetime DESC");
+
+        List<Outcome> repayments = outcomeMapper.selectByExample(example);
+
+        for (Outcome repayment : repayments) {
+            // 检查确认状态
+            OutcomeParticipant participant = outcomeParticipantMapper.selectByOutcomeAndUser(
+                repayment.getId(), repayment.getTargetUserid());
+
+            // 只返回待确认的
+            if (participant != null && participant.getConfirmStatus() != null && participant.getConfirmStatus() == 1) {
+                continue; // 已确认，跳过
+            }
+
+            User creditor = userMapper.selectByPrimaryKey(repayment.getTargetUserid());
+            if (creditor == null) {
+                continue;
+            }
+
+            MyPendingRepaymentItem item = new MyPendingRepaymentItem();
+            item.setRepaymentId(repayment.getId());
+            item.setCreditorId(creditor.getId());
+            item.setCreditorName(creditor.getNickname());
+            item.setCreditorAvatarUrl(creditor.getAvatarUrl());
+            item.setAmount(repayment.getAmount());
+            item.setComment(repayment.getComment());
+            item.setPayDatetime(repayment.getPayDatetime());
+
+            result.add(item);
+        }
+
+        return result;
     }
 }

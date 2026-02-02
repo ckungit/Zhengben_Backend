@@ -2,6 +2,8 @@ package com.zhangben.backend.controller;
 
 import cn.dev33.satoken.stp.StpUtil;
 import com.zhangben.backend.mapper.StatsMapper;
+import com.zhangben.backend.mapper.UserMapper;
+import com.zhangben.backend.model.User;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -13,6 +15,20 @@ public class StatsController {
 
     @Autowired
     private StatsMapper statsMapper;
+
+    @Autowired
+    private UserMapper userMapper;
+
+    /**
+     * 获取用户的语言偏好，默认中文
+     */
+    private String getUserLanguage(Integer userId) {
+        User user = userMapper.selectByPrimaryKey(userId);
+        if (user != null && user.getPreferredLanguage() != null && !user.getPreferredLanguage().isEmpty()) {
+            return user.getPreferredLanguage();
+        }
+        return "zh-CN";
+    }
 
     /**
      * 获取消费统计总览
@@ -55,14 +71,14 @@ public class StatsController {
     }
 
     /**
-     * 获取分类消费统计
+     * 获取分类消费统计（本地化）
      */
     @GetMapping("/category")
     public List<Map<String, Object>> category(@RequestParam(defaultValue = "6") Integer months) {
         StpUtil.checkLogin();
         Integer userId = StpUtil.getLoginIdAsInt();
 
-        List<Map<String, Object>> data = statsMapper.getCategoryStats(userId, months);
+        List<Map<String, Object>> data = statsMapper.getCategoryStats(userId, months, getUserLanguage(userId));
         
         // 格式化金额
         for (Map<String, Object> item : data) {
@@ -147,8 +163,8 @@ public class StatsController {
         }
         result.put("monthly", monthly);
 
-        // 分类统计
-        List<Map<String, Object>> category = statsMapper.getCategoryStats(userId, months);
+        // 分类统计（本地化）
+        List<Map<String, Object>> category = statsMapper.getCategoryStats(userId, months, getUserLanguage(userId));
         for (Map<String, Object> item : category) {
             Object amount = item.get("totalAmount");
             if (amount != null) {

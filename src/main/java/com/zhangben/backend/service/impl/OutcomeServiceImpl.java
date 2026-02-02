@@ -4,6 +4,7 @@ import cn.dev33.satoken.stp.StpUtil;
 import com.zhangben.backend.dto.OutcomeCreateRequest;
 import com.zhangben.backend.dto.RecentOutcomeItem;
 import com.zhangben.backend.mapper.ActivityMapper;
+import com.zhangben.backend.mapper.NotificationMapper;
 import com.zhangben.backend.mapper.OutcomeMapper;
 import com.zhangben.backend.mapper.OutcomeParticipantMapper;
 import com.zhangben.backend.mapper.PayStyleMapper;
@@ -45,6 +46,9 @@ public class OutcomeServiceImpl implements OutcomeService {
 
     @Autowired
     private EmailService emailService;
+
+    @Autowired
+    private NotificationMapper notificationMapper;
 
     @Override
     public void createOutcome(OutcomeCreateRequest req) {
@@ -94,6 +98,7 @@ public class OutcomeServiceImpl implements OutcomeService {
         Outcome outcome = new Outcome();
         outcome.setAmount(req.getAmount());
         outcome.setPayerUserid(payerId);
+        outcome.setCreatorId(payerId); // V29: 设置创建者ID
         outcome.setTargetUserid(0); // 多人场景下不使用此字段
         outcome.setRepayFlag(req.getRepayFlag());
         outcome.setPerAmount(perAmount);
@@ -164,20 +169,43 @@ public class OutcomeServiceImpl implements OutcomeService {
 
                 for (Integer uid : req.getTargetUserIds()) {
                     User participant = userMapper.selectByPrimaryKey(uid);
-                    if (participant != null && participant.getEmail() != null) {
-                        // 使用用户首选语言发送邮件（默认中文）
-                        emailService.sendBillNotificationAsync(
-                            participant.getEmail(),
-                            participant.getNickname(),
-                            "zh-CN", // 可以从用户配置中获取首选语言
-                            payerName,
-                            outcome.getAmount(),
-                            perAmount,
-                            req.getComment(),
-                            styleName,
-                            activityName,
-                            false // isUpdate = false for new bill
-                        );
+                    if (participant != null) {
+                        // V31: 发送站内通知
+                        try {
+                            Notification notification = new Notification();
+                            notification.setUserId(uid);
+                            notification.setType("bill_created");
+                            notification.setTitle(payerName + " 创建了新账单");
+                            String content = "金额: ¥" + String.format("%.2f", outcome.getAmount() / 100.0);
+                            if (activityName != null) {
+                                content += " (活动: " + activityName + ")";
+                            }
+                            notification.setContent(content);
+                            notification.setRelatedId(Long.valueOf(outcome.getId()));
+                            notification.setRelatedType("outcome");
+                            notification.setIsRead((byte) 0);
+                            notification.setCreatedAt(LocalDateTime.now());
+                            notificationMapper.insertSelective(notification);
+                        } catch (Exception ex) {
+                            logger.warn("发送站内通知失败: {}", ex.getMessage());
+                        }
+
+                        // 发送邮件通知
+                        if (participant.getEmail() != null) {
+                            // 使用用户首选语言发送邮件（默认中文）
+                            emailService.sendBillNotificationAsync(
+                                participant.getEmail(),
+                                participant.getNickname(),
+                                "zh-CN", // 可以从用户配置中获取首选语言
+                                payerName,
+                                outcome.getAmount(),
+                                perAmount,
+                                req.getComment(),
+                                styleName,
+                                activityName,
+                                false // isUpdate = false for new bill
+                            );
+                        }
                     }
                 }
             } catch (Exception e) {
@@ -271,21 +299,22 @@ public class OutcomeServiceImpl implements OutcomeService {
     public void deleteOutcome(Integer outcomeId, Integer userId) {
         // 查询记录
         Outcome outcome = outcomeMapper.selectByPrimaryKey(outcomeId);
-        
+
         if (outcome == null) {
             throw new IllegalArgumentException("记录不存在");
         }
-        
-        // 检查是否是本人创建的记录
-        if (!outcome.getPayerUserid().equals(userId)) {
-            throw new IllegalArgumentException("只能删除自己创建的记录");
+
+        // V29: 检查是否是创建者（优先使用creatorId，兼容旧数据使用payerUserid）
+        Integer creatorId = outcome.getCreatorId() != null ? outcome.getCreatorId() : outcome.getPayerUserid();
+        if (!creatorId.equals(userId)) {
+            throw new IllegalArgumentException("只有账单创建者才能删除");
         }
-        
+
         // 检查是否已删除
         if (outcome.getDeletedFlag() != null && outcome.getDeletedFlag() == 1) {
             throw new IllegalArgumentException("记录已删除");
         }
-        
+
         // 软删除
         outcome.setDeletedFlag((byte) 1);
         outcomeMapper.updateByPrimaryKeySelective(outcome);

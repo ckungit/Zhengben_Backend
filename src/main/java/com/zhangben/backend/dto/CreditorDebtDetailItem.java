@@ -10,6 +10,8 @@ public class CreditorDebtDetailItem {
     private Long amount;
     private LocalDateTime payDatetime;
     private String locationText;
+    private Boolean isRepayment; // 是否是还款记录
+    private Integer confirmStatus; // 确认状态: 0=待确认, 1=已确认, null=非还款记录
 
     public Integer getOutcomeId() {
         return outcomeId;
@@ -57,5 +59,21 @@ public class CreditorDebtDetailItem {
 
     public void setLocationText(String locationText) {
         this.locationText = locationText;
+    }
+
+    public Boolean getIsRepayment() {
+        return isRepayment;
+    }
+
+    public void setIsRepayment(Boolean isRepayment) {
+        this.isRepayment = isRepayment;
+    }
+
+    public Integer getConfirmStatus() {
+        return confirmStatus;
+    }
+
+    public void setConfirmStatus(Integer confirmStatus) {
+        this.confirmStatus = confirmStatus;
     }
 }
