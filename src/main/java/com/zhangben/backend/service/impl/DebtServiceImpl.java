@@ -1,6 +1,7 @@
 package com.zhangben.backend.service.impl;
 
 import com.zhangben.backend.dto.*;
+import com.zhangben.backend.mapper.FavoredUserMapper;
 import com.zhangben.backend.mapper.NotificationMapper;
 import com.zhangben.backend.mapper.OutcomeMapper;
 import com.zhangben.backend.mapper.OutcomeParticipantMapper;
@@ -15,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class DebtServiceImpl implements DebtService {
@@ -36,6 +38,9 @@ public class DebtServiceImpl implements DebtService {
 
     @Autowired
     private EmailService emailService;
+
+    @Autowired
+    private FavoredUserMapper favoredUserMapper;
 
     /**
      * 使用 Example 查询所有未删除的 outcome
@@ -92,7 +97,9 @@ public class DebtServiceImpl implements DebtService {
             // V30: 只有已确认的还款才计入
             if (o.getRepayFlag() == (byte) 2) {
 
-                Integer debtor = o.getPayerUserid();
+                // V35: 使用 onBehalfOf 确定真正的债务人（债务归属人）
+                // 如果是代还，onBehalfOf 是被代还的好友；否则是付款人自己
+                Integer debtor = o.getOnBehalfOf() != null ? o.getOnBehalfOf() : o.getPayerUserid();
                 Integer creditor = o.getTargetUserid();
 
                 // 检查还款是否已确认
@@ -248,7 +255,9 @@ public class DebtServiceImpl implements DebtService {
             // 还款明细
             if (o.getRepayFlag() == (byte) 2) {
 
-                if (o.getPayerUserid().equals(userId) && o.getTargetUserid().equals(creditorId)) {
+                // V35: 使用 onBehalfOf 确定真正的债务人
+                Integer actualDebtor = o.getOnBehalfOf() != null ? o.getOnBehalfOf() : o.getPayerUserid();
+                if (actualDebtor.equals(userId) && o.getTargetUserid().equals(creditorId)) {
 
                     CreditorDebtDetailItem item = new CreditorDebtDetailItem();
                     item.setOutcomeId(o.getId());
@@ -429,7 +438,9 @@ public class DebtServiceImpl implements DebtService {
                 // 还款明细 - 对方还给我
                 if (o.getRepayFlag() == (byte) 2) {
 
-                    if (o.getPayerUserid().equals(debtorId) && o.getTargetUserid().equals(userId)) {
+                    // V35: 使用 onBehalfOf 确定真正的债务人
+                    Integer actualDebtor = o.getOnBehalfOf() != null ? o.getOnBehalfOf() : o.getPayerUserid();
+                    if (actualDebtor.equals(debtorId) && o.getTargetUserid().equals(userId)) {
 
                         DebtorDebtDetailItem d = new DebtorDebtDetailItem();
                         d.setOutcomeId(o.getId());
@@ -546,17 +557,27 @@ public class DebtServiceImpl implements DebtService {
                     }
                 }
 
-                // 还款明细 - 我还给债权人
+                // 还款明细 - 我的债务被还款（可能是我自己还，也可能是别人代我还）
                 if (o.getRepayFlag() == (byte) 2) {
 
-                    if (o.getPayerUserid().equals(userId) && o.getTargetUserid().equals(creditorId)) {
+                    // V35: 使用 onBehalfOf 确定真正的债务人
+                    Integer actualDebtor = o.getOnBehalfOf() != null ? o.getOnBehalfOf() : o.getPayerUserid();
+                    if (actualDebtor.equals(userId) && o.getTargetUserid().equals(creditorId)) {
 
                         CreditorDebtDetailItem d = new CreditorDebtDetailItem();
                         d.setOutcomeId(o.getId());
                         d.setAmount(-o.getAmount());
                         d.setComment(o.getComment());
                         d.setPayDatetime(o.getPayDatetime());
-                        d.setCategoryName("还款");
+
+                        // V35: 显示是否为代还
+                        boolean isOnBehalf = o.getOnBehalfOf() != null && !o.getOnBehalfOf().equals(o.getPayerUserid());
+                        if (isOnBehalf) {
+                            User payer = userMapper.selectByPrimaryKey(o.getPayerUserid());
+                            d.setCategoryName("还款 (由" + (payer != null ? payer.getNickname() : "他人") + "代付)");
+                        } else {
+                            d.setCategoryName("还款");
+                        }
                         d.setLocationText("无");
                         d.setIsRepayment(true);
 
@@ -616,19 +637,43 @@ public class DebtServiceImpl implements DebtService {
                 continue;
             }
 
-            User debtor = userMapper.selectByPrimaryKey(repayment.getPayerUserid());
-            if (debtor == null) {
+            // V35: 使用 repaidBy 获取实际付款人
+            Integer repaidById = repayment.getRepaidBy() != null ?
+                repayment.getRepaidBy() : repayment.getPayerUserid();
+            User payer = userMapper.selectByPrimaryKey(repaidById);
+            if (payer == null) {
                 continue;
             }
 
             PendingRepaymentItem item = new PendingRepaymentItem();
             item.setRepaymentId(repayment.getId());
-            item.setDebtorId(debtor.getId());
-            item.setDebtorName(debtor.getNickname());
-            item.setDebtorAvatarUrl(debtor.getAvatarUrl());
+            item.setDebtorId(payer.getId());
+            item.setDebtorName(payer.getNickname());
+            item.setDebtorAvatarUrl(payer.getAvatarUrl());
             item.setAmount(repayment.getAmount());
             item.setComment(repayment.getComment());
             item.setPayDatetime(repayment.getPayDatetime());
+
+            // V35: 设置代还信息
+            item.setRepaidById(repaidById);
+            item.setRepaidByName(payer.getNickname());
+
+            Integer onBehalfOfId = repayment.getOnBehalfOf() != null ?
+                repayment.getOnBehalfOf() : repayment.getPayerUserid();
+            item.setOnBehalfOfId(onBehalfOfId);
+
+            // 判断是否为代还
+            boolean isOnBehalf = !repaidById.equals(onBehalfOfId);
+            item.setIsOnBehalf(isOnBehalf);
+
+            if (isOnBehalf) {
+                User beneficiary = userMapper.selectByPrimaryKey(onBehalfOfId);
+                if (beneficiary != null) {
+                    item.setOnBehalfOfName(beneficiary.getNickname());
+                }
+            } else {
+                item.setOnBehalfOfName(payer.getNickname());
+            }
 
             result.add(item);
         }
@@ -666,16 +711,28 @@ public class DebtServiceImpl implements DebtService {
         participant.setConfirmedBy(creditorId);
         outcomeParticipantMapper.updateByPrimaryKeySelective(participant);
 
-        // V31: 发送确认通知给还款人（站内信）
+        // V35: 获取付款人和被代还人信息
         User creditor = userMapper.selectByPrimaryKey(creditorId);
-        User debtor = userMapper.selectByPrimaryKey(repayment.getPayerUserid());
+        Integer repaidById = repayment.getRepaidBy() != null ?
+            repayment.getRepaidBy() : repayment.getPayerUserid();
+        Integer onBehalfOfId = repayment.getOnBehalfOf() != null ?
+            repayment.getOnBehalfOf() : repayment.getPayerUserid();
 
+        User payer = userMapper.selectByPrimaryKey(repaidById);
+        boolean isOnBehalf = !repaidById.equals(onBehalfOfId);
+        User beneficiary = isOnBehalf ? userMapper.selectByPrimaryKey(onBehalfOfId) : null;
+
+        // V31/V35: 发送确认通知给付款人（站内信）
         try {
             Notification notification = new Notification();
-            notification.setUserId(repayment.getPayerUserid());
+            notification.setUserId(repaidById);
             notification.setType("repayment_confirmed");
             notification.setTitle(creditor.getNickname() + " 确认收到还款");
-            notification.setContent("金额: ¥" + String.format("%.2f", repayment.getAmount() / 100.0));
+            String content = "金额: ¥" + String.format("%.2f", repayment.getAmount() / 100.0);
+            if (isOnBehalf && beneficiary != null) {
+                content += " (代 " + beneficiary.getNickname() + " 还款)";
+            }
+            notification.setContent(content);
             notification.setRelatedId(Long.valueOf(repaymentId));
             notification.setRelatedType("repayment");
             notification.setIsRead((byte) 0);
@@ -685,25 +742,68 @@ public class DebtServiceImpl implements DebtService {
             // 站内信发送失败不影响业务
         }
 
-        // V32: 发送确认邮件给还款人（异步，失败不影响业务）
+        // V35: 如果是代还，还要通知被代还人
+        if (isOnBehalf && beneficiary != null) {
+            try {
+                Notification notification = new Notification();
+                notification.setUserId(onBehalfOfId);
+                notification.setType("repayment_confirmed");
+                notification.setTitle(payer.getNickname() + " 代您向 " + creditor.getNickname() + " 还款已确认");
+                notification.setContent("金额: ¥" + String.format("%.2f", repayment.getAmount() / 100.0));
+                notification.setRelatedId(Long.valueOf(repaymentId));
+                notification.setRelatedType("repayment");
+                notification.setIsRead((byte) 0);
+                notification.setCreatedAt(LocalDateTime.now());
+                notificationMapper.insertSelective(notification);
+            } catch (Exception e) {
+                // 站内信发送失败不影响业务
+            }
+        }
+
+        // V32/V35: 发送确认邮件给付款人（异步，失败不影响业务）
         try {
-            if (debtor != null && debtor.getEmail() != null) {
-                String language = debtor.getPreferredLanguage() != null ? debtor.getPreferredLanguage() : "zh-CN";
+            if (payer != null && payer.getEmail() != null) {
+                String language = payer.getPreferredLanguage() != null ? payer.getPreferredLanguage() : "zh-CN";
+                String emailContent = "还款确认通知: " + (repayment.getComment() != null ? repayment.getComment() : "还款已确认");
+                if (isOnBehalf && beneficiary != null) {
+                    emailContent += " (代 " + beneficiary.getNickname() + " 还款)";
+                }
                 emailService.sendBillNotificationAsync(
-                    debtor.getEmail(),
-                    debtor.getNickname(),
+                    payer.getEmail(),
+                    payer.getNickname(),
                     language,
                     creditor.getNickname(),
                     repayment.getAmount(),
-                    repayment.getAmount(), // perAmount 等于 amount
-                    "还款确认通知: " + (repayment.getComment() != null ? repayment.getComment() : "还款已确认"),
+                    repayment.getAmount(),
+                    emailContent,
                     "还款确认",
                     null,
-                    false // 不是更新通知
+                    false
                 );
             }
         } catch (Exception e) {
             // 邮件发送失败不影响业务
+        }
+
+        // V35: 发送确认邮件给被代还人（异步）
+        if (isOnBehalf && beneficiary != null && beneficiary.getEmail() != null) {
+            try {
+                String language = beneficiary.getPreferredLanguage() != null ? beneficiary.getPreferredLanguage() : "zh-CN";
+                emailService.sendBillNotificationAsync(
+                    beneficiary.getEmail(),
+                    beneficiary.getNickname(),
+                    language,
+                    payer.getNickname() + " 代您",
+                    repayment.getAmount(),
+                    repayment.getAmount(),
+                    "代还款已确认: " + creditor.getNickname() + " 已确认收款",
+                    "代还款确认",
+                    null,
+                    false
+                );
+            } catch (Exception e) {
+                // 邮件发送失败不影响业务
+            }
         }
     }
 
@@ -759,6 +859,308 @@ public class DebtServiceImpl implements DebtService {
 
             result.add(item);
         }
+
+        return result;
+    }
+
+    @Override
+    @Transactional
+    public void batchRepay(BatchRepayRequest req, Integer currentUserId) {
+        if (req.getItems() == null || req.getItems().isEmpty()) {
+            throw new IllegalArgumentException("还款明细不能为空");
+        }
+
+        User payer = userMapper.selectByPrimaryKey(currentUserId);
+        User creditor = userMapper.selectByPrimaryKey(req.getCreditorId());
+
+        if (creditor == null) {
+            throw new IllegalArgumentException("债权人不存在");
+        }
+
+        LocalDateTime payTime = req.getPayDatetime() != null ? req.getPayDatetime() : LocalDateTime.now();
+        List<Integer> repaymentIds = new ArrayList<>();
+        StringBuilder detailsBuilder = new StringBuilder();
+        long totalAmount = 0L;
+
+        // 为每个代还对象创建独立的还款记录
+        for (BatchRepayRequest.RepaymentItem item : req.getItems()) {
+            Integer debtorId = item.getDebtorId();
+            Long amount = item.getAmount();
+
+            if (amount == null || amount <= 0) {
+                continue;
+            }
+
+            User debtor = userMapper.selectByPrimaryKey(debtorId);
+            if (debtor == null) {
+                continue;
+            }
+
+            // 判断是自己还款还是代人还款
+            boolean isOnBehalf = !debtorId.equals(currentUserId);
+
+            Outcome o = new Outcome();
+            o.setAmount(amount);
+            o.setPayerUserid(currentUserId);  // 实际付款人
+            o.setCreatorId(currentUserId);
+            o.setTargetUserid(req.getCreditorId());  // 债权人
+            o.setRepayFlag((byte) 2);
+            o.setPerAmount(amount);
+            o.setStyleId(0);
+            o.setComment(req.getComment());
+            o.setDeletedFlag((byte) 0);
+            o.setPayDatetime(payTime);
+
+            // V35: 设置代还字段
+            o.setRepaidBy(currentUserId);     // 实际付款人
+            o.setOnBehalfOf(debtorId);        // 被代还人（债务归属人）
+
+            outcomeMapper.insertSelective(o);
+            repaymentIds.add(o.getId());
+
+            // 创建参与者记录（待确认）
+            OutcomeParticipant participant = new OutcomeParticipant();
+            participant.setOutcomeId(o.getId());
+            participant.setUserId(req.getCreditorId());
+            participant.setShares(1);
+            participant.setConfirmStatus((byte) 0);
+            outcomeParticipantMapper.insertSelective(participant);
+
+            totalAmount += amount;
+
+            // 构建明细字符串
+            if (detailsBuilder.length() > 0) {
+                detailsBuilder.append(", ");
+            }
+            if (isOnBehalf) {
+                detailsBuilder.append(debtor.getNickname()).append("(代)");
+            } else {
+                detailsBuilder.append(debtor.getNickname());
+            }
+            detailsBuilder.append(" ¥").append(String.format("%.2f", amount / 100.0));
+        }
+
+        if (repaymentIds.isEmpty()) {
+            throw new IllegalArgumentException("没有有效的还款记录");
+        }
+
+        // V35: 发送合并通知给债权人（站内信）
+        try {
+            String notificationTitle;
+            String notificationContent;
+
+            if (req.getItems().size() == 1 && req.getItems().get(0).getDebtorId().equals(currentUserId)) {
+                // 单人自己还款
+                notificationTitle = payer.getNickname() + " 向你还款";
+                notificationContent = "金额: ¥" + String.format("%.2f", totalAmount / 100.0);
+            } else {
+                // 批量或代还
+                notificationTitle = payer.getNickname() + " 替多位成员还款";
+                notificationContent = "总金额: ¥" + String.format("%.2f", totalAmount / 100.0) +
+                    " (明细: " + detailsBuilder.toString() + ")";
+            }
+
+            if (req.getComment() != null && !req.getComment().isEmpty()) {
+                notificationContent += " - " + req.getComment();
+            }
+            notificationContent += "。请确认收款。";
+
+            Notification notification = new Notification();
+            notification.setUserId(req.getCreditorId());
+            notification.setType("repayment_received");
+            notification.setTitle(notificationTitle);
+            notification.setContent(notificationContent);
+            notification.setRelatedId(Long.valueOf(repaymentIds.get(0))); // 关联第一条记录
+            notification.setRelatedType("repayment");
+            notification.setIsRead((byte) 0);
+            notification.setCreatedAt(LocalDateTime.now());
+            notificationMapper.insertSelective(notification);
+        } catch (Exception e) {
+            // 站内信发送失败不影响业务
+        }
+
+        // V35: 发送邮件通知给债权人（异步）
+        try {
+            if (creditor.getEmail() != null) {
+                String language = creditor.getPreferredLanguage() != null ? creditor.getPreferredLanguage() : "zh-CN";
+                String emailContent = "收到还款，请确认。明细: " + detailsBuilder.toString();
+                if (req.getComment() != null) {
+                    emailContent += " - " + req.getComment();
+                }
+                emailService.sendBillNotificationAsync(
+                    creditor.getEmail(),
+                    creditor.getNickname(),
+                    language,
+                    payer.getNickname(),
+                    totalAmount,
+                    totalAmount,
+                    emailContent,
+                    "待确认还款",
+                    null,
+                    false
+                );
+            }
+        } catch (Exception e) {
+            // 邮件发送失败不影响业务
+        }
+    }
+
+    /**
+     * 获取当前用户的好友ID列表
+     */
+    private Set<Integer> getFriendIds(Integer currentUserId) {
+        FavoredUserExample example = new FavoredUserExample();
+        example.createCriteria().andUserIdEqualTo(currentUserId);
+        List<FavoredUser> favored = favoredUserMapper.selectByExample(example);
+        return favored.stream()
+            .map(FavoredUser::getFavoredUserId)
+            .collect(Collectors.toSet());
+    }
+
+    @Override
+    public List<DebtorDebtInfo> getDebtorsForCreditor(Integer creditorId, Integer currentUserId) {
+        // V35: 获取当前用户的好友列表
+        Set<Integer> friendIds = getFriendIds(currentUserId);
+
+        // 获取所有欠这个债权人钱的人
+        Map<String, Long> netMap = buildDebtMap();
+        Map<Integer, Long> debtorMap = new HashMap<>();
+        Map<Integer, Long> pendingMap = new HashMap<>();
+
+        // 计算每个人对债权人的净欠款
+        for (Map.Entry<String, Long> e : netMap.entrySet()) {
+            String[] parts = e.getKey().split("-");
+            Integer debtorId = Integer.valueOf(parts[0]);
+            Integer cId = Integer.valueOf(parts[1]);
+            Long amount = e.getValue();
+
+            if (amount > 0 && cId.equals(creditorId)) {
+                debtorMap.put(debtorId, debtorMap.getOrDefault(debtorId, 0L) + amount);
+            }
+        }
+
+        // 计算每个人的待确认金额
+        OutcomeExample example = new OutcomeExample();
+        example.createCriteria()
+            .andTargetUseridEqualTo(creditorId)
+            .andRepayFlagEqualTo((byte) 2)
+            .andDeletedFlagEqualTo((byte) 0);
+
+        List<Outcome> repayments = outcomeMapper.selectByExample(example);
+
+        for (Outcome repayment : repayments) {
+            OutcomeParticipant participant = outcomeParticipantMapper.selectByOutcomeAndUser(
+                repayment.getId(), creditorId);
+
+            // 只统计待确认的
+            if (participant == null || participant.getConfirmStatus() == null || participant.getConfirmStatus() == 0) {
+                // V35: 使用 onBehalfOf 字段确定真正的债务人
+                Integer actualDebtor = repayment.getOnBehalfOf() != null ?
+                    repayment.getOnBehalfOf() : repayment.getPayerUserid();
+                pendingMap.put(actualDebtor, pendingMap.getOrDefault(actualDebtor, 0L) + repayment.getAmount());
+            }
+        }
+
+        // 构建结果列表 - V35: 只返回好友
+        List<DebtorDebtInfo> result = new ArrayList<>();
+
+        for (Map.Entry<Integer, Long> e : debtorMap.entrySet()) {
+            Integer debtorId = e.getKey();
+
+            // V35: 只返回好友（排除自己）
+            if (!friendIds.contains(debtorId) || debtorId.equals(currentUserId)) {
+                continue;
+            }
+
+            Long totalDebt = e.getValue();
+            Long pendingAmount = pendingMap.getOrDefault(debtorId, 0L);
+            Long availableAmount = totalDebt - pendingAmount;
+
+            // 只返回有可还金额的债务人
+            if (availableAmount <= 0) {
+                continue;
+            }
+
+            User debtor = userMapper.selectByPrimaryKey(debtorId);
+            if (debtor == null) {
+                continue;
+            }
+
+            DebtorDebtInfo info = new DebtorDebtInfo();
+            info.setDebtorId(debtorId);
+            info.setDebtorName(debtor.getNickname());
+            info.setDebtorAvatarUrl(debtor.getAvatarUrl());
+            info.setTotalDebt(totalDebt);
+            info.setPendingAmount(pendingAmount);
+            info.setAvailableAmount(availableAmount);
+
+            result.add(info);
+        }
+
+        // 按可还金额降序排列
+        result.sort((a, b) -> Long.compare(b.getAvailableAmount(), a.getAvailableAmount()));
+
+        return result;
+    }
+
+    @Override
+    public List<CreditorForOnBehalfItem> getCreditorsWithFriendDebts(Integer currentUserId) {
+        // 获取当前用户的好友列表
+        Set<Integer> friendIds = getFriendIds(currentUserId);
+
+        if (friendIds.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        // 获取所有净欠款
+        Map<String, Long> netMap = buildDebtMap();
+
+        // 统计每个债权人有多少好友欠钱，以及总欠款
+        Map<Integer, Set<Integer>> creditorFriends = new HashMap<>();
+        Map<Integer, Long> creditorTotalDebt = new HashMap<>();
+
+        for (Map.Entry<String, Long> e : netMap.entrySet()) {
+            String[] parts = e.getKey().split("-");
+            Integer debtorId = Integer.valueOf(parts[0]);
+            Integer creditorId = Integer.valueOf(parts[1]);
+            Long amount = e.getValue();
+
+            // 只统计好友的正向欠款（好友欠别人钱）
+            if (amount > 0 && friendIds.contains(debtorId) && !debtorId.equals(currentUserId)) {
+                creditorFriends.computeIfAbsent(creditorId, k -> new HashSet<>()).add(debtorId);
+                creditorTotalDebt.put(creditorId, creditorTotalDebt.getOrDefault(creditorId, 0L) + amount);
+            }
+        }
+
+        // 构建结果列表
+        List<CreditorForOnBehalfItem> result = new ArrayList<>();
+
+        for (Map.Entry<Integer, Set<Integer>> e : creditorFriends.entrySet()) {
+            Integer creditorId = e.getKey();
+            Set<Integer> friends = e.getValue();
+
+            // V35: 排除自己作为债权人（不能帮朋友把钱还给自己）
+            if (creditorId.equals(currentUserId)) {
+                continue;
+            }
+
+            User creditor = userMapper.selectByPrimaryKey(creditorId);
+            if (creditor == null) {
+                continue;
+            }
+
+            CreditorForOnBehalfItem item = new CreditorForOnBehalfItem();
+            item.setCreditorId(creditorId);
+            item.setCreditorName(creditor.getNickname());
+            item.setCreditorAvatarUrl(creditor.getAvatarUrl());
+            item.setFriendCount(friends.size());
+            item.setTotalFriendDebt(creditorTotalDebt.getOrDefault(creditorId, 0L));
+
+            result.add(item);
+        }
+
+        // 按好友总欠款降序排列
+        result.sort((a, b) -> Long.compare(b.getTotalFriendDebt(), a.getTotalFriendDebt()));
 
         return result;
     }

@@ -6,6 +6,21 @@ import java.util.List;
 
 public interface DebtService {
 
+    /**
+     * V35: 批量还款（支持代人还款）
+     */
+    void batchRepay(BatchRepayRequest req, Integer currentUserId);
+
+    /**
+     * V35: 获取某债权人下好友债务人的欠款信息（只返回好友）
+     */
+    List<DebtorDebtInfo> getDebtorsForCreditor(Integer creditorId, Integer currentUserId);
+
+    /**
+     * V35: 获取有好友欠款的债权人列表（用于帮他人还款）
+     */
+    List<CreditorForOnBehalfItem> getCreditorsWithFriendDebts(Integer currentUserId);
+
     MyDebtSummaryResponse getMyDebtSummary(Integer userId);
 
     CreditorDebtOverviewResponse getDebtByCreditor(Integer userId, Integer creditorId);

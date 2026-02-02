@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 
 /**
  * V30: 待确认的还款项
+ * V35: 增加代还信息字段
  */
 public class PendingRepaymentItem {
 
@@ -14,6 +15,13 @@ public class PendingRepaymentItem {
     private Long amount;
     private String comment;
     private LocalDateTime payDatetime;
+
+    // V35: 代还信息
+    private Integer repaidById;       // 实际付款人ID
+    private String repaidByName;      // 实际付款人名称
+    private Integer onBehalfOfId;     // 被代还人ID
+    private String onBehalfOfName;    // 被代还人名称
+    private Boolean isOnBehalf;       // 是否为代还
 
     public Integer getRepaymentId() {
         return repaymentId;
@@ -69,5 +77,45 @@ public class PendingRepaymentItem {
 
     public void setPayDatetime(LocalDateTime payDatetime) {
         this.payDatetime = payDatetime;
+    }
+
+    public Integer getRepaidById() {
+        return repaidById;
+    }
+
+    public void setRepaidById(Integer repaidById) {
+        this.repaidById = repaidById;
+    }
+
+    public String getRepaidByName() {
+        return repaidByName;
+    }
+
+    public void setRepaidByName(String repaidByName) {
+        this.repaidByName = repaidByName;
+    }
+
+    public Integer getOnBehalfOfId() {
+        return onBehalfOfId;
+    }
+
+    public void setOnBehalfOfId(Integer onBehalfOfId) {
+        this.onBehalfOfId = onBehalfOfId;
+    }
+
+    public String getOnBehalfOfName() {
+        return onBehalfOfName;
+    }
+
+    public void setOnBehalfOfName(String onBehalfOfName) {
+        this.onBehalfOfName = onBehalfOfName;
+    }
+
+    public Boolean getIsOnBehalf() {
+        return isOnBehalf;
+    }
+
+    public void setIsOnBehalf(Boolean isOnBehalf) {
+        this.isOnBehalf = isOnBehalf;
     }
 }

@@ -27,6 +27,16 @@ public class RecentOutcomeItem {
     private Integer activityId;     // 关联的活动ID
     private String activityName;    // 活动名称
 
+    // V29: 账单创建者
+    private Integer creatorId;
+
+    // V35: 记录类型 - "expense"(支出), "repayment"(还款), "income"(收入)
+    private String recordType;
+
+    // V35: 付款人信息（用于收入记录，显示谁还给了我）
+    private Integer payerId;
+    private String payerName;
+
     // Getters and Setters
     public Integer getId() {
         return id;
@@ -138,5 +148,37 @@ public class RecentOutcomeItem {
 
     public void setActivityName(String activityName) {
         this.activityName = activityName;
+    }
+
+    public Integer getCreatorId() {
+        return creatorId;
+    }
+
+    public void setCreatorId(Integer creatorId) {
+        this.creatorId = creatorId;
+    }
+
+    public String getRecordType() {
+        return recordType;
+    }
+
+    public void setRecordType(String recordType) {
+        this.recordType = recordType;
+    }
+
+    public Integer getPayerId() {
+        return payerId;
+    }
+
+    public void setPayerId(Integer payerId) {
+        this.payerId = payerId;
+    }
+
+    public String getPayerName() {
+        return payerName;
+    }
+
+    public void setPayerName(String payerName) {
+        this.payerName = payerName;
     }
 }

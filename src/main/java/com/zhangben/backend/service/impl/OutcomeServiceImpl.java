@@ -218,81 +218,125 @@ public class OutcomeServiceImpl implements OutcomeService {
     @Override
     public List<RecentOutcomeItem> getRecentOutcomes(Integer userId, Integer limit) {
 
-        // 查询用户作为支付者的所有记录
-        OutcomeExample example = new OutcomeExample();
-        example.createCriteria()
-                .andPayerUseridEqualTo(userId)
-                .andDeletedFlagEqualTo((byte) 0);
-        example.setOrderByClause("pay_datetime DESC");
-
-        List<Outcome> outcomes = outcomeMapper.selectByExample(example);
-
-        // 限制数量
-        List<Outcome> limited = outcomes.stream()
-                .limit(limit)
-                .collect(Collectors.toList());
-
         List<RecentOutcomeItem> result = new ArrayList<>();
 
-        for (Outcome o : limited) {
-            RecentOutcomeItem item = new RecentOutcomeItem();
-            item.setId(o.getId());
-            item.setAmount(o.getAmount());
-            item.setPerAmount(o.getPerAmount());
-            item.setComment(o.getComment());
-            item.setRepayFlag(o.getRepayFlag());
-            item.setPayDatetime(o.getPayDatetime());
+        // 1. 查询用户作为支付者的所有记录（支出和还款）
+        OutcomeExample payerExample = new OutcomeExample();
+        payerExample.createCriteria()
+                .andPayerUseridEqualTo(userId)
+                .andDeletedFlagEqualTo((byte) 0);
+        List<Outcome> payerOutcomes = outcomeMapper.selectByExample(payerExample);
 
-            // 获取分类名称
-            if (o.getRepayFlag() == (byte) 2) {
-                // 还款记录
-                item.setStyleName("还款");
-                
-                // 设置还款对象信息
-                if (o.getTargetUserid() != null && o.getTargetUserid() > 0) {
-                    item.setTargetUserId(o.getTargetUserid());
-                    User targetUser = userMapper.selectByPrimaryKey(o.getTargetUserid());
-                    if (targetUser != null) {
-                        item.setTargetUserName(targetUser.getNickname());
-                    }
-                }
-            } else {
-                // 普通支付记录
-                if (o.getStyleId() != null && o.getStyleId() > 0) {
-                    PayStyle style = payStyleMapper.selectByPrimaryKey(o.getStyleId());
-                    item.setStyleName(style != null ? style.getStyleName() : "未分类");
-                } else {
-                    item.setStyleName("未分类");
+        for (Outcome o : payerOutcomes) {
+            RecentOutcomeItem item = buildRecentOutcomeItem(o, userId, false);
+            result.add(item);
+        }
+
+        // 2. V35: 查询用户作为还款接收者的记录（收入）
+        OutcomeExample targetExample = new OutcomeExample();
+        targetExample.createCriteria()
+                .andTargetUseridEqualTo(userId)
+                .andRepayFlagEqualTo((byte) 2)
+                .andDeletedFlagEqualTo((byte) 0);
+        List<Outcome> incomeOutcomes = outcomeMapper.selectByExample(targetExample);
+
+        for (Outcome o : incomeOutcomes) {
+            RecentOutcomeItem item = buildRecentOutcomeItem(o, userId, true);
+            result.add(item);
+        }
+
+        // 3. 按时间倒序排序并限制数量
+        result.sort((a, b) -> b.getPayDatetime().compareTo(a.getPayDatetime()));
+
+        return result.stream()
+                .limit(limit)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * V35: 构建最近记录项
+     * @param o 数据库记录
+     * @param userId 当前用户ID
+     * @param isIncome 是否是收入记录（别人还给我的）
+     */
+    private RecentOutcomeItem buildRecentOutcomeItem(Outcome o, Integer userId, boolean isIncome) {
+        RecentOutcomeItem item = new RecentOutcomeItem();
+        item.setId(o.getId());
+        item.setAmount(o.getAmount());
+        item.setPerAmount(o.getPerAmount());
+        item.setComment(o.getComment());
+        item.setRepayFlag(o.getRepayFlag());
+        item.setPayDatetime(o.getPayDatetime());
+        item.setCreatorId(o.getCreatorId() != null ? o.getCreatorId() : o.getPayerUserid());
+
+        // V35: 设置记录类型和相关信息
+        if (isIncome) {
+            // 收入：别人还给我的钱
+            item.setRecordType("income");
+            item.setStyleName("收入");
+            item.setPayerId(o.getPayerUserid());
+            User payer = userMapper.selectByPrimaryKey(o.getPayerUserid());
+            if (payer != null) {
+                item.setPayerName(payer.getNickname());
+            }
+            // V35: 如果是代还，显示实际付款人和被代还人
+            if (o.getOnBehalfOf() != null && !o.getOnBehalfOf().equals(o.getPayerUserid())) {
+                User beneficiary = userMapper.selectByPrimaryKey(o.getOnBehalfOf());
+                if (beneficiary != null && payer != null) {
+                    item.setPayerName(payer.getNickname() + " (代" + beneficiary.getNickname() + ")");
                 }
             }
+        } else if (o.getRepayFlag() == (byte) 2) {
+            // 还款：我还给别人的钱
+            item.setRecordType("repayment");
+            item.setStyleName("还款");
+            if (o.getTargetUserid() != null && o.getTargetUserid() > 0) {
+                item.setTargetUserId(o.getTargetUserid());
+                User targetUser = userMapper.selectByPrimaryKey(o.getTargetUserid());
+                if (targetUser != null) {
+                    item.setTargetUserName(targetUser.getNickname());
+                }
+            }
+        } else {
+            // 支出：普通消费记录
+            item.setRecordType("expense");
+            if (o.getStyleId() != null && o.getStyleId() > 0) {
+                PayStyle style = payStyleMapper.selectByPrimaryKey(o.getStyleId());
+                item.setStyleName(style != null ? style.getStyleName() : "未分类");
+            } else {
+                item.setStyleName("未分类");
+            }
+        }
 
-            // 获取参与者名称
+        // 获取参与者名称（非收入记录）
+        if (!isIncome) {
             OutcomeParticipantExample pExample = new OutcomeParticipantExample();
             pExample.createCriteria().andOutcomeIdEqualTo(o.getId());
             List<OutcomeParticipant> participants = outcomeParticipantMapper.selectByExample(pExample);
 
             List<String> names = new ArrayList<>();
+            List<Integer> ids = new ArrayList<>();
             for (OutcomeParticipant p : participants) {
                 User u = userMapper.selectByPrimaryKey(p.getUserId());
                 if (u != null) {
                     names.add(u.getNickname());
+                    ids.add(u.getId());
                 }
             }
             item.setParticipantNames(names);
-
-            // 设置活动信息
-            if (o.getActivityId() != null && o.getActivityId() > 0) {
-                item.setActivityId(o.getActivityId());
-                Activity activity = activityMapper.selectById(o.getActivityId());
-                if (activity != null) {
-                    item.setActivityName(activity.getName());
-                }
-            }
-
-            result.add(item);
+            item.setParticipantIds(ids);
         }
 
-        return result;
+        // 设置活动信息
+        if (o.getActivityId() != null && o.getActivityId() > 0) {
+            item.setActivityId(o.getActivityId());
+            Activity activity = activityMapper.selectById(o.getActivityId());
+            if (activity != null) {
+                item.setActivityName(activity.getName());
+            }
+        }
+
+        return item;
     }
 
     @Override

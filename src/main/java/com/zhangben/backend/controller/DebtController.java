@@ -114,4 +114,34 @@ public class DebtController {
         Integer userId = StpUtil.getLoginIdAsInt();
         return debtService.getMyPendingRepayments(userId);
     }
+
+    /**
+     * V35: 批量还款（支持代人还款）
+     */
+    @PostMapping("/batch-repay")
+    public String batchRepay(@RequestBody BatchRepayRequest req) {
+        Integer userId = StpUtil.getLoginIdAsInt();
+        debtService.batchRepay(req, userId);
+        return "批量还款成功";
+    }
+
+    /**
+     * V35: 获取某债权人下好友债务人的欠款信息
+     * 用于代人还款时选择要帮谁还款（只返回好友）
+     */
+    @GetMapping("/debtors-for-creditor/{creditorId}")
+    public List<DebtorDebtInfo> getDebtorsForCreditor(@PathVariable Integer creditorId) {
+        Integer userId = StpUtil.getLoginIdAsInt();
+        return debtService.getDebtorsForCreditor(creditorId, userId);
+    }
+
+    /**
+     * V35: 获取有好友欠款的债权人列表
+     * 用于帮他人还款时选择要还给谁
+     */
+    @GetMapping("/creditors-for-on-behalf")
+    public List<CreditorForOnBehalfItem> getCreditorsForOnBehalf() {
+        Integer userId = StpUtil.getLoginIdAsInt();
+        return debtService.getCreditorsWithFriendDebts(userId);
+    }
 }

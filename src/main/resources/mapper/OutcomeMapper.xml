@@ -23,6 +23,8 @@
     <result column="updated_at" jdbcType="TIMESTAMP" property="updatedAt" />
     <result column="total_shares" jdbcType="INTEGER" property="totalShares" />
     <result column="activity_id" jdbcType="INTEGER" property="activityId" />
+    <result column="repaid_by" jdbcType="INTEGER" property="repaidBy" />
+    <result column="on_behalf_of" jdbcType="INTEGER" property="onBehalfOf" />
   </resultMap>
   <resultMap extends="BaseResultMap" id="ResultMapWithBLOBs" type="com.zhangben.backend.model.Outcome">
     <!--
@@ -107,7 +109,8 @@
       This element was generated on Wed Jan 28 08:42:00 JST 2026.
     -->
     id, amount, payer_userid, creator_id, target_userid, per_amount, extra_participants, repay_flag,
-    pay_datetime, style_id, comment, deleted_flag, created_at, updated_at, total_shares, activity_id
+    pay_datetime, style_id, comment, deleted_flag, created_at, updated_at, total_shares, activity_id,
+    repaid_by, on_behalf_of
   </sql>
   <sql id="Blob_Column_List">
     <!--
@@ -266,6 +269,12 @@
       <if test="creatorId != null">
         creator_id,
       </if>
+      <if test="repaidBy != null">
+        repaid_by,
+      </if>
+      <if test="onBehalfOf != null">
+        on_behalf_of,
+      </if>
     </trim>
     <trim prefix="values (" suffix=")" suffixOverrides=",">
       <if test="id != null">
@@ -318,6 +327,12 @@
       </if>
       <if test="creatorId != null">
         #{creatorId,jdbcType=INTEGER},
+      </if>
+      <if test="repaidBy != null">
+        #{repaidBy,jdbcType=INTEGER},
+      </if>
+      <if test="onBehalfOf != null">
+        #{onBehalfOf,jdbcType=INTEGER},
       </if>
     </trim>
   </insert>
