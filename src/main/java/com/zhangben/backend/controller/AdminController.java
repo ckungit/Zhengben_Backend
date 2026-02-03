@@ -1,11 +1,13 @@
 package com.zhangben.backend.controller;
 
 import cn.dev33.satoken.stp.StpUtil;
+import com.zhangben.backend.dto.SubscriptionInfoResponse;
 import com.zhangben.backend.mapper.SystemConfigMapper;
 import com.zhangben.backend.mapper.UserMapper;
 import com.zhangben.backend.model.SystemConfig;
 import com.zhangben.backend.model.User;
 import com.zhangben.backend.model.UserExample;
+import com.zhangben.backend.service.SubscriptionService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -25,6 +27,9 @@ public class AdminController {
 
     @Autowired
     private SystemConfigMapper systemConfigMapper;
+
+    @Autowired
+    private SubscriptionService subscriptionService;
 
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
@@ -168,6 +173,73 @@ public class AdminController {
         }
 
         return ResponseEntity.ok(Map.of("message", "反馈配置已更新"));
+    }
+
+    // ==================== V42: 订阅管理 ====================
+
+    /**
+     * V42: 将用户提升为永久 PRO 会员
+     */
+    @PostMapping("/user/promote")
+    public ResponseEntity<?> promoteUserToPermanentPro(@RequestParam Integer userId) {
+        if (!checkAdmin()) {
+            return ResponseEntity.status(403).body(Map.of("error", "无权限，仅管理员可操作"));
+        }
+
+        User targetUser = userMapper.selectByPrimaryKey(userId);
+        if (targetUser == null) {
+            return ResponseEntity.status(404).body(Map.of("error", "用户不存在"));
+        }
+
+        Integer adminId = StpUtil.getLoginIdAsInt();
+        subscriptionService.promoteToPermenentPro(userId, adminId);
+
+        return ResponseEntity.ok(Map.of(
+            "message", "已将用户提升为永久 PRO 会员",
+            "userId", userId,
+            "nickname", targetUser.getNickname()
+        ));
+    }
+
+    /**
+     * V42: 修改用户订阅信息
+     */
+    @PutMapping("/user/{userId}/subscription")
+    public ResponseEntity<?> updateUserSubscription(
+            @PathVariable Integer userId,
+            @RequestBody Map<String, Object> body) {
+        if (!checkAdmin()) {
+            return ResponseEntity.status(403).body(Map.of("error", "无权限，仅管理员可操作"));
+        }
+
+        User targetUser = userMapper.selectByPrimaryKey(userId);
+        if (targetUser == null) {
+            return ResponseEntity.status(404).body(Map.of("error", "用户不存在"));
+        }
+
+        String tier = (String) body.get("tier");
+        String type = (String) body.get("type");
+        Integer durationDays = body.get("durationDays") != null
+            ? ((Number) body.get("durationDays")).intValue()
+            : null;
+
+        Integer adminId = StpUtil.getLoginIdAsInt();
+        subscriptionService.updateSubscription(userId, tier, type, durationDays, adminId);
+
+        return ResponseEntity.ok(Map.of("message", "订阅信息已更新"));
+    }
+
+    /**
+     * V42: 获取用户订阅信息
+     */
+    @GetMapping("/user/{userId}/subscription")
+    public ResponseEntity<?> getUserSubscription(@PathVariable Integer userId) {
+        if (!checkAdmin()) {
+            return ResponseEntity.status(403).body(Map.of("error", "无权限，仅管理员可操作"));
+        }
+
+        SubscriptionInfoResponse info = subscriptionService.getSubscriptionInfo(userId);
+        return ResponseEntity.ok(info);
     }
 
     /**

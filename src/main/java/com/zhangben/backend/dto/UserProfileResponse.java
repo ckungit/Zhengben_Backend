@@ -20,6 +20,7 @@ public class UserProfileResponse {
     private String bankAccount;
     private String preferredLanguage;
     private String primaryCurrency;
+    private String googleId;  // V43: Google 绑定 ID
 
     // Getters and Setters
     public Integer getId() {
@@ -140,5 +141,13 @@ public class UserProfileResponse {
 
     public void setPrimaryCurrency(String primaryCurrency) {
         this.primaryCurrency = primaryCurrency;
+    }
+
+    public String getGoogleId() {
+        return googleId;
+    }
+
+    public void setGoogleId(String googleId) {
+        this.googleId = googleId;
     }
 }

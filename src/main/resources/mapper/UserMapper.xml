@@ -29,6 +29,13 @@
     <result column="updated_at" jdbcType="TIMESTAMP" property="updatedAt" />
     <result column="is_deleted" jdbcType="TINYINT" property="isDeleted" />
     <result column="deleted_at" jdbcType="TIMESTAMP" property="deletedAt" />
+    <!-- V42: 订阅字段 -->
+    <result column="subscription_tier" jdbcType="VARCHAR" property="subscriptionTier" />
+    <result column="subscription_type" jdbcType="VARCHAR" property="subscriptionType" />
+    <result column="subscription_start_date" jdbcType="TIMESTAMP" property="subscriptionStartDate" />
+    <result column="subscription_expiry_date" jdbcType="TIMESTAMP" property="subscriptionExpiryDate" />
+    <result column="subscription_auto_renew" jdbcType="TINYINT" property="subscriptionAutoRenew" />
+    <result column="subscription_reminder_sent" jdbcType="TINYINT" property="subscriptionReminderSent" />
   </resultMap>
   <sql id="Example_Where_Clause">
     <!--
@@ -106,7 +113,9 @@
     -->
     ID, email, google_id, password, secondname, firstname, nickname, avatar_url, preferred_language,
     primary_currency, paypay_flag, paypay_account, bank_flag, bank_name, bank_branch, bank_account, role,
-    profile_completed, created_at, updated_at, is_deleted, deleted_at
+    profile_completed, created_at, updated_at, is_deleted, deleted_at,
+    subscription_tier, subscription_type, subscription_start_date, subscription_expiry_date,
+    subscription_auto_renew, subscription_reminder_sent
   </sql>
   <select id="selectByExample" parameterType="com.zhangben.backend.model.UserExample" resultMap="BaseResultMap">
     <!--
@@ -465,6 +474,24 @@
       <if test="deletedAt != null">
         deleted_at = #{deletedAt,jdbcType=TIMESTAMP},
       </if>
+      <if test="subscriptionTier != null">
+        subscription_tier = #{subscriptionTier,jdbcType=VARCHAR},
+      </if>
+      <if test="subscriptionType != null">
+        subscription_type = #{subscriptionType,jdbcType=VARCHAR},
+      </if>
+      <if test="subscriptionStartDate != null">
+        subscription_start_date = #{subscriptionStartDate,jdbcType=TIMESTAMP},
+      </if>
+      <if test="subscriptionExpiryDate != null">
+        subscription_expiry_date = #{subscriptionExpiryDate,jdbcType=TIMESTAMP},
+      </if>
+      <if test="subscriptionAutoRenew != null">
+        subscription_auto_renew = #{subscriptionAutoRenew,jdbcType=TINYINT},
+      </if>
+      <if test="subscriptionReminderSent != null">
+        subscription_reminder_sent = #{subscriptionReminderSent,jdbcType=TINYINT},
+      </if>
     </set>
     where ID = #{id,jdbcType=INTEGER}
   </update>
@@ -514,5 +541,23 @@
       deleted_at = NOW(),
       updated_at = NOW()
     WHERE ID = #{userId}
+  </update>
+
+  <!-- V42: 查找即将到期的订阅 -->
+  <select id="selectExpiringSubscriptions" resultType="com.zhangben.backend.model.User">
+    SELECT * FROM user
+    WHERE subscription_type != 'PERMANENT'
+      AND subscription_expiry_date IS NOT NULL
+      AND subscription_expiry_date > #{now}
+      AND subscription_expiry_date &lt;= #{expiryThreshold}
+      AND (subscription_reminder_sent IS NULL OR subscription_reminder_sent = 0)
+      AND (is_deleted IS NULL OR is_deleted = 0)
+  </select>
+
+  <!-- V42: 重置所有用户的续费提醒状态 -->
+  <update id="resetSubscriptionReminderStatus">
+    UPDATE user
+    SET subscription_reminder_sent = 0
+    WHERE subscription_reminder_sent = 1
   </update>
 </mapper>

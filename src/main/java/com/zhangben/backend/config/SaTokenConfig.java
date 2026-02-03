@@ -40,6 +40,9 @@ public class SaTokenConfig implements WebMvcConfigurer {
                     // V39: 反馈状态接口不拦截（允许未登录用户查询）
                     .notMatch("/api/feedback/status")
 
+                    // V42: 功能开关接口不拦截（前端需要在登录前获取）
+                    .notMatch("/api/features")
+
                     // 静态资源不拦截
                     .notMatch("/static/**", "/public/**", "/resources/**", "/favicon.ico")
 

@@ -1,12 +1,21 @@
 package com.zhangben.backend.dto;
 
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * V42: 添加 Bean Validation 注解
+ */
 public class OutcomeCreateRequest {
 
     // 总金额（必填）
+    @NotNull(message = "金额不能为空")
+    @Min(value = 1, message = "金额必须大于0")
     private Long amount;
 
     // 参与者ID列表（注册用户）
@@ -20,12 +29,15 @@ public class OutcomeCreateRequest {
     private Boolean includeSelf;
 
     // 本人的份额数（V18新增：自定义份额功能，默认1）
+    @Min(value = 1, message = "份额至少为1")
     private Integer selfShares;
 
     // 额外参与人数（未注册用户）
+    @Min(value = 0, message = "额外参与人数不能为负")
     private Integer extraParticipants;
 
     // 额外参与者的总份额数（V18新增：自定义份额功能，默认等于extraParticipants）
+    @Min(value = 0, message = "额外份额数不能为负")
     private Integer extraShares;
 
     // 1 = 支付款项，2 = 还钱记录
@@ -35,6 +47,7 @@ public class OutcomeCreateRequest {
     private Integer styleId;
 
     // 备注
+    @Size(max = 500, message = "备注最多500个字符")
     private String comment;
 
     // GPS

@@ -18,6 +18,7 @@
 
     <properties>
         <java.version>25</java.version>
+        <mapstruct.version>1.5.5.Final</mapstruct.version>
     </properties>
 
     <dependencies>
@@ -146,6 +147,19 @@
 		    <artifactId>spring-boot-starter-validation</artifactId>
 		</dependency>
 
+		<!-- V42: MapStruct - DTO 映射 -->
+		<dependency>
+		    <groupId>org.mapstruct</groupId>
+		    <artifactId>mapstruct</artifactId>
+		    <version>${mapstruct.version}</version>
+		</dependency>
+		<dependency>
+		    <groupId>org.mapstruct</groupId>
+		    <artifactId>mapstruct-processor</artifactId>
+		    <version>${mapstruct.version}</version>
+		    <scope>provided</scope>
+		</dependency>
+
     </dependencies>
 
     <profiles>
@@ -190,6 +204,24 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+
+            <!-- V42: Maven Compiler with MapStruct -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.mapstruct</groupId>
+                            <artifactId>mapstruct-processor</artifactId>
+                            <version>${mapstruct.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                    <compilerArgs>
+                        <arg>-Amapstruct.defaultComponentModel=spring</arg>
+                    </compilerArgs>
+                </configuration>
             </plugin>
 
         </plugins>

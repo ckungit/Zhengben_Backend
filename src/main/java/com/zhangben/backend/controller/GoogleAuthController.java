@@ -106,28 +106,34 @@ public class GoogleAuthController {
         List<User> emailUsers = userMapper.selectByExample(emailExample);
 
         if (emailUsers.isEmpty()) {
-            // 新用户 - 临时登录，让用户选择：绑定已有账号 or 注册新账号
+            // V43: 新用户 - 临时登录，直接进入注册流程（不再显示决策页面）
             StpUtil.login(googleId, "google-temp");
             StpUtil.getSession().set("googleId", googleId);
             StpUtil.getSession().set("googleEmail", email);
 
-            response.setToken(StpUtil.getTokenValue()); // 关键：返回token
+            response.setToken(StpUtil.getTokenValue());
             response.setIsNewUser(true);
             response.setNeedsProfileCompletion(true);
             return response;
 
         } else {
             User existingUser = emailUsers.get(0);
-            
-            // 邮箱相同但未绑定 Google - 让用户验证密码后关联
-            StpUtil.login(existingUser.getId(), "google-link-pending");
-            StpUtil.getSession().set("googleId", googleId);
-            StpUtil.getSession().set("googleEmail", email);
+
+            // V43: 邮箱相同 - 自动绑定 Google ID 并登录（无需密码验证）
+            User update = new User();
+            update.setId(existingUser.getId());
+            update.setGoogleId(googleId);
+            userMapper.updateByPrimaryKeySelective(update);
+
+            // 直接登录
+            StpUtil.login(existingUser.getId(), "google-sso");
+            CurrencyUtils.setSessionCurrency(existingUser.getPrimaryCurrency());
 
             response.setToken(StpUtil.getTokenValue());
             response.setIsNewUser(false);
             response.setNeedsProfileCompletion(false);
-            // 不设置 nickname，前端会跳转到关联页面
+            response.setNickname(existingUser.getNickname());
+            response.setRole(existingUser.getRole());
         }
 
         return response;

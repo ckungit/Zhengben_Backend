@@ -1,10 +1,18 @@
 package com.zhangben.backend.controller;
 
 import cn.dev33.satoken.stp.StpUtil;
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
+import com.google.api.client.http.javanet.NetHttpTransport;
+import com.google.api.client.json.gson.GsonFactory;
+import com.zhangben.backend.config.FeatureConfig;
+import com.zhangben.backend.dto.SubscriptionInfoResponse;
 import com.zhangben.backend.dto.UserProfileResponse;
 import com.zhangben.backend.model.User;
+import com.zhangben.backend.model.UserExample;
 import com.zhangben.backend.mapper.UserMapper;
 import com.zhangben.backend.service.R2StorageService;
+import com.zhangben.backend.service.SubscriptionService;
 import com.zhangben.backend.service.UserProfileService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -15,6 +23,8 @@ import org.springframework.web.multipart.MultipartFile;
 import com.zhangben.backend.util.CurrencyUtils;
 import java.io.IOException;
 import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -30,8 +40,17 @@ public class UserProfileController {
     @Autowired
     private R2StorageService r2StorageService;
 
+    @Autowired
+    private SubscriptionService subscriptionService;
+
+    @Autowired
+    private FeatureConfig featureConfig;
+
     @Value("${avatar.max-file-size:51200}")
     private long maxFileSize;
+
+    @Value("${google.client-id:}")
+    private String googleClientId;
 
     /**
      * 获取当前用户详细信息
@@ -57,6 +76,8 @@ public class UserProfileController {
         resp.setAvatarUrl(user.getAvatarUrl());
         resp.setPreferredLanguage(user.getPreferredLanguage());
         resp.setPrimaryCurrency(user.getPrimaryCurrency() != null ? user.getPrimaryCurrency() : "JPY");
+        // V43: Google 绑定状态
+        resp.setGoogleId(user.getGoogleId());
 
         return resp;
     }
@@ -219,5 +240,126 @@ public class UserProfileController {
         }
 
         return "头像已删除";
+    }
+
+    /**
+     * V42: 获取当前用户订阅信息
+     */
+    @GetMapping("/subscription")
+    public ResponseEntity<?> getSubscriptionInfo() {
+        // 功能未启用时返回默认免费用户信息
+        if (!featureConfig.isSubscriptionEnabled()) {
+            return ResponseEntity.ok(createDefaultSubscriptionResponse());
+        }
+
+        try {
+            Integer userId = StpUtil.getLoginIdAsInt();
+            SubscriptionInfoResponse info = subscriptionService.getSubscriptionInfo(userId);
+            return ResponseEntity.ok(info);
+        } catch (Exception e) {
+            // 数据库字段可能不存在，返回默认值
+            return ResponseEntity.ok(createDefaultSubscriptionResponse());
+        }
+    }
+
+    private SubscriptionInfoResponse createDefaultSubscriptionResponse() {
+        SubscriptionInfoResponse defaultResponse = new SubscriptionInfoResponse();
+        defaultResponse.setTier("FREE");
+        defaultResponse.setType(null);
+        defaultResponse.setPermanent(false);
+        defaultResponse.setInRenewalWindow(false);
+        defaultResponse.setTierDisplayName("Free");
+        defaultResponse.setTypeDisplayName(null);
+        defaultResponse.setDaysUntilExpiry(null);
+        defaultResponse.setAutoRenew(false);
+        return defaultResponse;
+    }
+
+    /**
+     * V43: 绑定 Google 账号
+     */
+    @PostMapping("/google/bind")
+    public ResponseEntity<?> bindGoogleAccount(@RequestBody Map<String, String> request) {
+        if (googleClientId == null || googleClientId.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Google SSO 未配置"));
+        }
+
+        Integer userId = StpUtil.getLoginIdAsInt();
+        User currentUser = userMapper.selectByPrimaryKey(userId);
+
+        // 检查是否已绑定
+        if (currentUser.getGoogleId() != null && !currentUser.getGoogleId().isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "已绑定 Google 账号"));
+        }
+
+        String credential = request.get("credential");
+        if (credential == null || credential.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "凭证无效"));
+        }
+
+        try {
+            // 验证 Google ID Token
+            GoogleIdTokenVerifier verifier = new GoogleIdTokenVerifier.Builder(
+                    new NetHttpTransport(),
+                    GsonFactory.getDefaultInstance())
+                    .setAudience(Collections.singletonList(googleClientId))
+                    .build();
+
+            GoogleIdToken idToken = verifier.verify(credential);
+            if (idToken == null) {
+                return ResponseEntity.badRequest().body(Map.of("message", "无效的 Google 凭证"));
+            }
+
+            GoogleIdToken.Payload payload = idToken.getPayload();
+            String googleId = payload.getSubject();
+
+            // 检查该 Google 账号是否已被其他用户绑定
+            UserExample googleIdExample = new UserExample();
+            googleIdExample.createCriteria().andGoogleIdEqualTo(googleId);
+            List<User> existingUsers = userMapper.selectByExample(googleIdExample);
+
+            if (!existingUsers.isEmpty()) {
+                return ResponseEntity.badRequest().body(Map.of("message", "该 Google 账号已被其他用户绑定"));
+            }
+
+            // 绑定
+            User updateUser = new User();
+            updateUser.setId(userId);
+            updateUser.setGoogleId(googleId);
+            updateUser.setUpdatedAt(LocalDateTime.now());
+            userMapper.updateByPrimaryKeySelective(updateUser);
+
+            return ResponseEntity.ok(Map.of("message", "绑定成功"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("message", "绑定失败：" + e.getMessage()));
+        }
+    }
+
+    /**
+     * V43: 解绑 Google 账号
+     */
+    @PostMapping("/google/unbind")
+    public ResponseEntity<?> unbindGoogleAccount() {
+        Integer userId = StpUtil.getLoginIdAsInt();
+        User currentUser = userMapper.selectByPrimaryKey(userId);
+
+        // 检查是否已绑定
+        if (currentUser.getGoogleId() == null || currentUser.getGoogleId().isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "尚未绑定 Google 账号"));
+        }
+
+        // 检查是否有密码（防止解绑后无法登录）
+        if (currentUser.getPassword() == null || currentUser.getPassword().isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "请先设置密码后再解绑 Google 账号"));
+        }
+
+        // 解绑
+        User updateUser = new User();
+        updateUser.setId(userId);
+        updateUser.setGoogleId("");
+        updateUser.setUpdatedAt(LocalDateTime.now());
+        userMapper.updateByPrimaryKeySelective(updateUser);
+
+        return ResponseEntity.ok(Map.of("message", "解绑成功"));
     }
 }

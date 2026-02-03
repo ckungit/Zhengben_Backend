@@ -2,6 +2,7 @@ package com.zhangben.backend.mapper;
 
 import com.zhangben.backend.model.User;
 import com.zhangben.backend.model.UserExample;
+import java.time.LocalDateTime;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
@@ -99,4 +100,17 @@ public interface UserMapper {
      * Clears all PII while keeping the record for referential integrity
      */
     int anonymizeUser(@Param("userId") Integer userId);
+
+    /**
+     * V42: 查找即将到期的订阅（排除永久会员和已发送提醒的用户）
+     */
+    List<User> selectExpiringSubscriptions(
+        @Param("now") LocalDateTime now,
+        @Param("expiryThreshold") LocalDateTime expiryThreshold
+    );
+
+    /**
+     * V42: 重置所有用户的提醒发送状态
+     */
+    int resetSubscriptionReminderStatus();
 }

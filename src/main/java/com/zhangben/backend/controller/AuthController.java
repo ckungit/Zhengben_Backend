@@ -15,6 +15,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import com.zhangben.backend.util.CurrencyUtils;
+import jakarta.validation.Valid;
 import java.io.ByteArrayInputStream;
 import java.time.LocalDateTime;
 import java.util.Base64;
@@ -32,9 +33,9 @@ public class AuthController {
     @Autowired
     private R2StorageService r2StorageService;
 
-    // 登录
+    // 登录 - V42: 使用 @Valid 启用 Bean Validation
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody LoginRequest req) {
+    public ResponseEntity<?> login(@Valid @RequestBody LoginRequest req) {
 
         User user = userService.findByEmail(req.getEmail());
         
@@ -73,19 +74,11 @@ public class AuthController {
         );
     }
 
-    // 注册
+    // 注册 - V42: 使用 @Valid 启用 Bean Validation
     @PostMapping("/register")
-    public ResponseEntity<?> register(@RequestBody RegisterRequest req) {
+    public ResponseEntity<?> register(@Valid @RequestBody RegisterRequest req) {
 
-        // 验证密码长度
-        if (req.getPassword() == null || req.getPassword().length() < 8) {
-            return ResponseEntity.badRequest().body("密码至少8位");
-        }
-
-        // V39: 验证货币字段
-        if (req.getPrimaryCurrency() == null || req.getPrimaryCurrency().isEmpty()) {
-            return ResponseEntity.badRequest().body("请选择主要货币");
-        }
+        // V39: 验证货币字段（业务逻辑校验仍需手动）
         if (!CurrencyUtils.isValidCurrency(req.getPrimaryCurrency())) {
             return ResponseEntity.badRequest().body("不支持的货币类型");
         }
