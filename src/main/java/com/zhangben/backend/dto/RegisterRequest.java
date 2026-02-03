@@ -20,6 +20,17 @@ public class RegisterRequest {
     // V24: 头像 Base64 数据 (可选)
     private String avatarBase64;
 
+    // V39: 用户主要货币 (必填)
+    private String primaryCurrency;
+
+    public String getPrimaryCurrency() {
+        return primaryCurrency;
+    }
+
+    public void setPrimaryCurrency(String primaryCurrency) {
+        this.primaryCurrency = primaryCurrency;
+    }
+
     public String getAvatarBase64() {
         return avatarBase64;
     }

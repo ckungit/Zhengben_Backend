@@ -76,4 +76,9 @@
         DELETE FROM activity_invitation WHERE activity_id = #{activityId}
     </delete>
 
+    <!-- V40: GDPR - Delete all invitations involving a user -->
+    <delete id="deleteByUser">
+        DELETE FROM activity_invitation WHERE inviter_id = #{userId} OR invitee_id = #{userId}
+    </delete>
+
 </mapper>

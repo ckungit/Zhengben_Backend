@@ -53,4 +53,9 @@ public interface ActivityInvitationMapper {
      * 删除活动的所有邀请
      */
     void deleteByActivity(Integer activityId);
+
+    /**
+     * V40: Delete all invitations involving a user (GDPR)
+     */
+    void deleteByUser(@Param("userId") Integer userId);
 }

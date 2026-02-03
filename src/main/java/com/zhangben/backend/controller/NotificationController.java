@@ -57,4 +57,14 @@ public class NotificationController {
         notificationService.markAllAsRead(userId);
         return "全部标记为已读";
     }
+
+    /**
+     * V41: 删除所有通知（清除全部）
+     */
+    @DeleteMapping("/clear-all")
+    public String clearAllNotifications() {
+        Integer userId = StpUtil.getLoginIdAsInt();
+        notificationService.deleteAllNotifications(userId);
+        return "已清除全部通知";
+    }
 }

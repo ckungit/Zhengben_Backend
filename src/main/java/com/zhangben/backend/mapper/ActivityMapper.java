@@ -23,4 +23,14 @@ public interface ActivityMapper {
     Map<String, Object> selectActivityStats(@Param("activityId") Integer activityId);
     
     List<Map<String, Object>> selectMemberStats(@Param("activityId") Integer activityId);
+
+    /**
+     * V40: Get activities created by a user (GDPR)
+     */
+    List<Activity> selectByCreatorId(@Param("creatorId") Integer creatorId);
+
+    /**
+     * V40: Update activity creator (for ownership transfer)
+     */
+    int updateCreatorId(@Param("id") Integer id, @Param("newCreatorId") Integer newCreatorId);
 }

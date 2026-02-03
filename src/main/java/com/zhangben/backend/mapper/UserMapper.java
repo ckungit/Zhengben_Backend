@@ -93,4 +93,10 @@ public interface UserMapper {
      * @mbg.generated Wed Jan 28 17:17:06 JST 2026
      */
     int updateByPrimaryKey(User row);
+
+    /**
+     * V40: GDPR - Anonymize user data (soft delete)
+     * Clears all PII while keeping the record for referential integrity
+     */
+    int anonymizeUser(@Param("userId") Integer userId);
 }

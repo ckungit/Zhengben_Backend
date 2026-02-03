@@ -76,4 +76,14 @@
         WHERE m.activity_id = #{activityId}
     </select>
 
+    <!-- V40: GDPR - Get activities created by a user -->
+    <select id="selectByCreatorId" resultMap="BaseResultMap">
+        SELECT * FROM activity WHERE creator_id = #{creatorId}
+    </select>
+
+    <!-- V40: Update activity creator for ownership transfer -->
+    <update id="updateCreatorId">
+        UPDATE activity SET creator_id = #{newCreatorId} WHERE id = #{id}
+    </update>
+
 </mapper>

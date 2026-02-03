@@ -23,4 +23,14 @@ public interface ActivityMemberMapper {
     int deleteByActivityId(@Param("activityId") Integer activityId);
     
     int countByActivityId(@Param("activityId") Integer activityId);
+
+    /**
+     * V40: Delete all memberships for a user (GDPR)
+     */
+    int deleteByUserId(@Param("userId") Integer userId);
+
+    /**
+     * V40: Get first other member of an activity (for ownership transfer)
+     */
+    Map<String, Object> selectFirstOtherMember(@Param("activityId") Integer activityId, @Param("excludeUserId") Integer excludeUserId);
 }

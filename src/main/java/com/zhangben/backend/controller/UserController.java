@@ -5,7 +5,11 @@ import com.zhangben.backend.dto.UserSearchResult;
 import com.zhangben.backend.model.User;
 import com.zhangben.backend.model.UserExample;
 import com.zhangben.backend.mapper.UserMapper;
+import com.zhangben.backend.service.AccountDeletionService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
@@ -15,8 +19,13 @@ import java.util.List;
 @RequestMapping("/api/user")
 public class UserController {
 
+    private static final Logger logger = LoggerFactory.getLogger(UserController.class);
+
     @Autowired
     private UserMapper userMapper;
+
+    @Autowired
+    private AccountDeletionService accountDeletionService;
 
     /**
      * 搜索用户（通过昵称或邮箱）
@@ -100,5 +109,26 @@ public class UserController {
             return "";
         }
         return (secondname != null ? secondname : "") + (firstname != null ? firstname : "");
+    }
+
+    /**
+     * V40: GDPR Compliant Account Deletion
+     * Permanently deletes user account and all associated data
+     * Implements "Right to be Forgotten"
+     */
+    @DeleteMapping("/account/delete")
+    public ResponseEntity<String> deleteAccount() {
+        StpUtil.checkLogin();
+        Integer userId = StpUtil.getLoginIdAsInt();
+
+        logger.info("User {} requested account deletion (GDPR)", userId);
+
+        try {
+            accountDeletionService.deleteAccountPermanently(userId);
+            return ResponseEntity.ok("Account deleted successfully");
+        } catch (Exception e) {
+            logger.error("Account deletion failed for user {}: {}", userId, e.getMessage());
+            return ResponseEntity.internalServerError().body("Account deletion failed: " + e.getMessage());
+        }
     }
 }

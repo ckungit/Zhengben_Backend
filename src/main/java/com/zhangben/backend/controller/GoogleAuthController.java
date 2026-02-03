@@ -19,6 +19,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
+import com.zhangben.backend.util.CurrencyUtils;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -78,7 +79,8 @@ public class GoogleAuthController {
             if (existingUser.getProfileCompleted() == null || !existingUser.getProfileCompleted()) {
                 // 需要完善资料
                 StpUtil.login(existingUser.getId(), "google-sso");
-                
+                CurrencyUtils.setSessionCurrency(existingUser.getPrimaryCurrency());
+
                 response.setToken(StpUtil.getTokenValue());
                 response.setIsNewUser(false);
                 response.setNeedsProfileCompletion(true);
@@ -86,7 +88,8 @@ public class GoogleAuthController {
             } else {
                 // 正常登录
                 StpUtil.login(existingUser.getId(), "google-sso");
-                
+                CurrencyUtils.setSessionCurrency(existingUser.getPrimaryCurrency());
+
                 response.setToken(StpUtil.getTokenValue());
                 response.setIsNewUser(false);
                 response.setNeedsProfileCompletion(false);
@@ -197,6 +200,7 @@ public class GoogleAuthController {
 
             // 正式登录
             StpUtil.login(user.getId(), "google-sso");
+            CurrencyUtils.setSessionCurrency(user.getPrimaryCurrency());
 
         } else {
             // 老用户完善资料流程
@@ -274,6 +278,7 @@ public class GoogleAuthController {
 
         // 正式登录
         StpUtil.login(userId, "google-sso");
+        CurrencyUtils.setSessionCurrency(user.getPrimaryCurrency());
 
         LoginResponse response = new LoginResponse();
         response.setToken(StpUtil.getTokenValue());
@@ -364,6 +369,7 @@ public class GoogleAuthController {
 
         // 6. 正式登录
         StpUtil.login(existingUser.getId(), "google-sso");
+        CurrencyUtils.setSessionCurrency(existingUser.getPrimaryCurrency());
 
         // 7. 返回登录信息
         LoginResponse response = new LoginResponse();
@@ -373,7 +379,7 @@ public class GoogleAuthController {
         response.setRole(existingUser.getRole());
 
         return response;
-    }    
+    }
 
     /**
      * 检查用户资料是否完善

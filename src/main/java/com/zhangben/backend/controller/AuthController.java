@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import com.zhangben.backend.util.CurrencyUtils;
 import java.io.ByteArrayInputStream;
 import java.time.LocalDateTime;
 import java.util.Base64;
@@ -57,13 +58,17 @@ public class AuthController {
             );
         }
 
+        // V39: 登录成功后将货币存入 Session
+        CurrencyUtils.setSessionCurrency(user.getPrimaryCurrency());
+
         return ResponseEntity.ok(
                 java.util.Map.of(
                         "token", StpUtil.getTokenValue(),
                         "nickname", user.getNickname(),
                         "email", user.getEmail(),
                         "role", user.getRole(),
-                        "rememberMe", req.getRememberMe() != null && req.getRememberMe()
+                        "rememberMe", req.getRememberMe() != null && req.getRememberMe(),
+                        "primaryCurrency", user.getPrimaryCurrency() != null ? user.getPrimaryCurrency() : "JPY"
                 )
         );
     }
@@ -75,6 +80,14 @@ public class AuthController {
         // 验证密码长度
         if (req.getPassword() == null || req.getPassword().length() < 8) {
             return ResponseEntity.badRequest().body("密码至少8位");
+        }
+
+        // V39: 验证货币字段
+        if (req.getPrimaryCurrency() == null || req.getPrimaryCurrency().isEmpty()) {
+            return ResponseEntity.badRequest().body("请选择主要货币");
+        }
+        if (!CurrencyUtils.isValidCurrency(req.getPrimaryCurrency())) {
+            return ResponseEntity.badRequest().body("不支持的货币类型");
         }
 
         if (userService.findByEmail(req.getEmail()) != null) {
@@ -163,6 +176,7 @@ public class AuthController {
         resp.setSecondname(user.getSecondname());
         resp.setPaypayFlag(user.getPaypayFlag());
         resp.setBankFlag(user.getBankFlag());
+        resp.setPrimaryCurrency(user.getPrimaryCurrency() != null ? user.getPrimaryCurrency() : "JPY");
 
         return ResponseEntity.ok(resp);
     }

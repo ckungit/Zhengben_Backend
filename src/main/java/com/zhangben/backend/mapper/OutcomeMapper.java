@@ -130,4 +130,24 @@ public interface OutcomeMapper {
      * 软删除账单
      */
     int softDeleteById(@Param("id") Integer id);
+
+    /**
+     * V40: Get outcomes by activity ID (GDPR)
+     */
+    List<Outcome> selectOutcomesByActivityId(@Param("activityId") Integer activityId);
+
+    /**
+     * V40: Delete outcomes by activity ID (GDPR)
+     */
+    int deleteByActivityId(@Param("activityId") Integer activityId);
+
+    /**
+     * V40: Get outcomes by payer user ID (GDPR)
+     */
+    List<Outcome> selectByPayerUserId(@Param("payerUserId") Integer payerUserId);
+
+    /**
+     * V40: Delete outcomes by payer user ID (GDPR)
+     */
+    int deleteByPayerUserId(@Param("payerUserId") Integer payerUserId);
 }

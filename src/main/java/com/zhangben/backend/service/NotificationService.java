@@ -30,4 +30,9 @@ public interface NotificationService {
      * 标记所有通知为已读
      */
     void markAllAsRead(Integer userId);
+
+    /**
+     * V41: 删除用户所有通知（清除全部）
+     */
+    void deleteAllNotifications(Integer userId);
 }

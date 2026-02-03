@@ -10,6 +10,7 @@ import com.zhangben.backend.mapper.UserMapper;
 import com.zhangben.backend.model.*;
 import com.zhangben.backend.service.DebtService;
 import com.zhangben.backend.service.EmailService;
+import com.zhangben.backend.service.UserPaymentMethodService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,6 +42,9 @@ public class DebtServiceImpl implements DebtService {
 
     @Autowired
     private FavoredUserMapper favoredUserMapper;
+
+    @Autowired
+    private UserPaymentMethodService userPaymentMethodService;
 
     /**
      * 使用 Example 查询所有未删除的 outcome
@@ -515,9 +519,17 @@ public class DebtServiceImpl implements DebtService {
             item.setCreditorAvatarUrl(creditor.getAvatarUrl());
             item.setTotalAmount(totalAmount);
 
-            // 添加债权人支持的收款方式
+            // 添加债权人支持的收款方式（旧字段）
             item.setPaypaySupported(creditor.getPaypayFlag() != null && creditor.getPaypayFlag() == 1);
             item.setBankSupported(creditor.getBankFlag() != null && creditor.getBankFlag() == 1);
+
+            // V39: 添加债权人的支付方式列表和主要货币
+            item.setPrimaryCurrency(creditor.getPrimaryCurrency());
+            List<UserPaymentMethodDto> enabledMethods = userPaymentMethodService.getEnabledMethods(creditorId);
+            List<String> methodCodes = enabledMethods.stream()
+                    .map(UserPaymentMethodDto::getMethodCode)
+                    .collect(Collectors.toList());
+            item.setPaymentMethods(methodCodes);
 
             List<CreditorDebtDetailItem> details = new ArrayList<>();
             long pendingAmount = 0L; // V32: 累计待确认金额
@@ -1155,6 +1167,14 @@ public class DebtServiceImpl implements DebtService {
             item.setCreditorAvatarUrl(creditor.getAvatarUrl());
             item.setFriendCount(friends.size());
             item.setTotalFriendDebt(creditorTotalDebt.getOrDefault(creditorId, 0L));
+
+            // V39: 添加债权人支付方式和货币
+            item.setPrimaryCurrency(creditor.getPrimaryCurrency());
+            List<UserPaymentMethodDto> enabledMethods = userPaymentMethodService.getEnabledMethods(creditorId);
+            List<String> methodCodes = enabledMethods.stream()
+                    .map(UserPaymentMethodDto::getMethodCode)
+                    .collect(Collectors.toList());
+            item.setPaymentMethods(methodCodes);
 
             result.add(item);
         }

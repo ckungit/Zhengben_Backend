@@ -12,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.zhangben.backend.util.CurrencyUtils;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.Map;
@@ -55,6 +56,7 @@ public class UserProfileController {
         resp.setBankAccount(user.getBankAccount());
         resp.setAvatarUrl(user.getAvatarUrl());
         resp.setPreferredLanguage(user.getPreferredLanguage());
+        resp.setPrimaryCurrency(user.getPrimaryCurrency() != null ? user.getPrimaryCurrency() : "JPY");
 
         return resp;
     }
@@ -114,6 +116,34 @@ public class UserProfileController {
         userMapper.updateByPrimaryKeySelective(updateUser);
 
         return "语言设置已更新";
+    }
+
+    /**
+     * V39: 更新主要货币
+     */
+    @PostMapping("/currency")
+    public ResponseEntity<?> updateCurrency(@RequestParam String currency) {
+        Integer userId = StpUtil.getLoginIdAsInt();
+
+        // 验证货币代码
+        if (!CurrencyUtils.isValidCurrency(currency)) {
+            return ResponseEntity.badRequest().body("不支持的货币类型");
+        }
+
+        // 更新数据库
+        User updateUser = new User();
+        updateUser.setId(userId);
+        updateUser.setPrimaryCurrency(currency.toUpperCase());
+        updateUser.setUpdatedAt(LocalDateTime.now());
+        userMapper.updateByPrimaryKeySelective(updateUser);
+
+        // 同步更新 Session
+        CurrencyUtils.updateSessionCurrency(currency.toUpperCase());
+
+        return ResponseEntity.ok(Map.of(
+            "message", "货币设置已更新",
+            "currency", currency.toUpperCase()
+        ));
     }
 
     /**

@@ -53,4 +53,9 @@ public class NotificationServiceImpl implements NotificationService {
     public void markAllAsRead(Integer userId) {
         notificationMapper.markAllAsRead(userId);
     }
+
+    @Override
+    public void deleteAllNotifications(Integer userId) {
+        notificationMapper.deleteByUserId(userId);
+    }
 }

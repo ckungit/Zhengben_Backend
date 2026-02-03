@@ -87,4 +87,9 @@
   <delete id="deleteByPrimaryKey" parameterType="java.lang.Long">
     delete from notification where id = #{id,jdbcType=BIGINT}
   </delete>
+
+  <!-- V40: GDPR - Delete all notifications for a user -->
+  <delete id="deleteByUserId">
+    delete from notification where user_id = #{userId}
+  </delete>
 </mapper>

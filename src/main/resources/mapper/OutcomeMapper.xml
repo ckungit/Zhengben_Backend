@@ -587,4 +587,26 @@
   <update id="softDeleteById" parameterType="java.lang.Integer">
     UPDATE outcome SET deleted_flag = 1 WHERE id = #{id}
   </update>
+
+  <!-- V40: GDPR - Get outcomes by activity ID -->
+  <select id="selectOutcomesByActivityId" resultMap="BaseResultMap">
+    SELECT <include refid="Base_Column_List" />
+    FROM outcome WHERE activity_id = #{activityId}
+  </select>
+
+  <!-- V40: GDPR - Delete outcomes by activity ID -->
+  <delete id="deleteByActivityId">
+    DELETE FROM outcome WHERE activity_id = #{activityId}
+  </delete>
+
+  <!-- V40: GDPR - Get outcomes by payer user ID -->
+  <select id="selectByPayerUserId" resultMap="BaseResultMap">
+    SELECT <include refid="Base_Column_List" />
+    FROM outcome WHERE payer_userid = #{payerUserId}
+  </select>
+
+  <!-- V40: GDPR - Delete outcomes by payer user ID -->
+  <delete id="deleteByPayerUserId">
+    DELETE FROM outcome WHERE payer_userid = #{payerUserId}
+  </delete>
 </mapper>

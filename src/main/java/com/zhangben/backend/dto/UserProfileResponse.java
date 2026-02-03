@@ -19,6 +19,7 @@ public class UserProfileResponse {
     private String bankBranch;
     private String bankAccount;
     private String preferredLanguage;
+    private String primaryCurrency;
 
     // Getters and Setters
     public Integer getId() {
@@ -131,5 +132,13 @@ public class UserProfileResponse {
 
     public void setPreferredLanguage(String preferredLanguage) {
         this.preferredLanguage = preferredLanguage;
+    }
+
+    public String getPrimaryCurrency() {
+        return primaryCurrency;
+    }
+
+    public void setPrimaryCurrency(String primaryCurrency) {
+        this.primaryCurrency = primaryCurrency;
     }
 }

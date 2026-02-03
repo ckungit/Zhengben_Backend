@@ -1,5 +1,7 @@
 package com.zhangben.backend.dto;
 
+import java.util.List;
+
 /**
  * 用户搜索结果
  */
@@ -11,9 +13,15 @@ public class UserSearchResult {
     private String fullName;
     private String avatarUrl;
 
-    // 支持的收款方式
+    // 支持的收款方式（旧字段，保持兼容）
     private Boolean paypaySupported;
     private Boolean bankSupported;
+
+    // V39: 支付方式列表（新字段）
+    private List<String> paymentMethods;
+
+    // V39: 主要货币
+    private String primaryCurrency;
 
     public Integer getId() {
         return id;
@@ -69,5 +77,21 @@ public class UserSearchResult {
 
     public void setBankSupported(Boolean bankSupported) {
         this.bankSupported = bankSupported;
+    }
+
+    public List<String> getPaymentMethods() {
+        return paymentMethods;
+    }
+
+    public void setPaymentMethods(List<String> paymentMethods) {
+        this.paymentMethods = paymentMethods;
+    }
+
+    public String getPrimaryCurrency() {
+        return primaryCurrency;
+    }
+
+    public void setPrimaryCurrency(String primaryCurrency) {
+        this.primaryCurrency = primaryCurrency;
     }
 }

@@ -14,9 +14,13 @@ public class MyDebtOverviewItem {
     private Long pendingAmount; // V32: 待确认的还款金额
     private List<CreditorDebtDetailItem> details;
 
-    // 债权人支持的收款方式
+    // 债权人支持的收款方式（旧字段）
     private Boolean paypaySupported;
     private Boolean bankSupported;
+
+    // V39: 债权人支付方式列表和主要货币
+    private List<String> paymentMethods;
+    private String primaryCurrency;
 
     public Integer getCreditorId() {
         return creditorId;
@@ -80,5 +84,21 @@ public class MyDebtOverviewItem {
 
     public void setBankSupported(Boolean bankSupported) {
         this.bankSupported = bankSupported;
+    }
+
+    public List<String> getPaymentMethods() {
+        return paymentMethods;
+    }
+
+    public void setPaymentMethods(List<String> paymentMethods) {
+        this.paymentMethods = paymentMethods;
+    }
+
+    public String getPrimaryCurrency() {
+        return primaryCurrency;
+    }
+
+    public void setPrimaryCurrency(String primaryCurrency) {
+        this.primaryCurrency = primaryCurrency;
     }
 }

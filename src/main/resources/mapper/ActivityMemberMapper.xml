@@ -34,4 +34,19 @@
         SELECT COUNT(*) FROM activity_member WHERE activity_id = #{activityId}
     </select>
 
+    <!-- V40: GDPR - Delete all memberships for a user -->
+    <delete id="deleteByUserId">
+        DELETE FROM activity_member WHERE user_id = #{userId}
+    </delete>
+
+    <!-- V40: Get first other member for ownership transfer -->
+    <select id="selectFirstOtherMember" resultType="map">
+        SELECT m.user_id, u.nickname
+        FROM activity_member m
+        INNER JOIN user u ON m.user_id = u.id
+        WHERE m.activity_id = #{activityId} AND m.user_id != #{excludeUserId}
+        ORDER BY m.joined_at
+        LIMIT 1
+    </select>
+
 </mapper>

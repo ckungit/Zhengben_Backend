@@ -23,4 +23,9 @@ public interface NotificationMapper {
     int markAllAsRead(@Param("userId") Integer userId);
 
     int deleteByPrimaryKey(Long id);
+
+    /**
+     * V40: Delete all notifications for a user (GDPR)
+     */
+    int deleteByUserId(@Param("userId") Integer userId);
 }

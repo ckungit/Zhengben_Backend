@@ -53,6 +53,9 @@ public class UserServiceImpl implements UserService {
         user.setBankBranch(req.getBankBranch());
         user.setBankAccount(req.getBankAccount());
 
+        // V39: 设置用户货币
+        user.setPrimaryCurrency(req.getPrimaryCurrency());
+
         userMapper.insertSelective(user);
         return user;
 

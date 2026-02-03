@@ -27,4 +27,10 @@ public interface PasswordResetTokenMapper {
 
     @Delete("DELETE FROM password_reset_token WHERE expires_at < NOW() OR used = 1")
     int cleanExpired();
+
+    /**
+     * V40: Delete all tokens for a user (GDPR)
+     */
+    @Delete("DELETE FROM password_reset_token WHERE user_id = #{userId}")
+    int deleteAllByUserId(@Param("userId") Integer userId);
 }

@@ -37,6 +37,9 @@ public class SaTokenConfig implements WebMvcConfigurer {
                     // V14: 邀请链接查看接口不拦截（使用需要登录）
                     .notMatch("/api/invite/info/**")
 
+                    // V39: 反馈状态接口不拦截（允许未登录用户查询）
+                    .notMatch("/api/feedback/status")
+
                     // 静态资源不拦截
                     .notMatch("/static/**", "/public/**", "/resources/**", "/favicon.ico")
 

@@ -16,6 +16,7 @@
     <result column="nickname" jdbcType="VARCHAR" property="nickname" />
     <result column="avatar_url" jdbcType="VARCHAR" property="avatarUrl" />
     <result column="preferred_language" jdbcType="VARCHAR" property="preferredLanguage" />
+    <result column="primary_currency" jdbcType="VARCHAR" property="primaryCurrency" />
     <result column="paypay_flag" jdbcType="TINYINT" property="paypayFlag" />
     <result column="paypay_account" jdbcType="VARCHAR" property="paypayAccount" />
     <result column="bank_flag" jdbcType="TINYINT" property="bankFlag" />
@@ -26,6 +27,8 @@
     <result column="profile_completed" jdbcType="BIT" property="profileCompleted" />
     <result column="created_at" jdbcType="TIMESTAMP" property="createdAt" />
     <result column="updated_at" jdbcType="TIMESTAMP" property="updatedAt" />
+    <result column="is_deleted" jdbcType="TINYINT" property="isDeleted" />
+    <result column="deleted_at" jdbcType="TIMESTAMP" property="deletedAt" />
   </resultMap>
   <sql id="Example_Where_Clause">
     <!--
@@ -102,8 +105,8 @@
       This element was generated on Wed Jan 28 17:17:06 JST 2026.
     -->
     ID, email, google_id, password, secondname, firstname, nickname, avatar_url, preferred_language,
-    paypay_flag, paypay_account, bank_flag, bank_name, bank_branch, bank_account, role,
-    profile_completed, created_at, updated_at
+    primary_currency, paypay_flag, paypay_account, bank_flag, bank_name, bank_branch, bank_account, role,
+    profile_completed, created_at, updated_at, is_deleted, deleted_at
   </sql>
   <select id="selectByExample" parameterType="com.zhangben.backend.model.UserExample" resultMap="BaseResultMap">
     <!--
@@ -200,6 +203,9 @@
       <if test="nickname != null">
         nickname,
       </if>
+      <if test="primaryCurrency != null">
+        primary_currency,
+      </if>
       <if test="paypayFlag != null">
         paypay_flag,
       </if>
@@ -249,6 +255,9 @@
       </if>
       <if test="nickname != null">
         #{nickname,jdbcType=VARCHAR},
+      </if>
+      <if test="primaryCurrency != null">
+        #{primaryCurrency,jdbcType=VARCHAR},
       </if>
       <if test="paypayFlag != null">
         #{paypayFlag,jdbcType=TINYINT},
@@ -417,6 +426,9 @@
       <if test="preferredLanguage != null">
         preferred_language = #{preferredLanguage,jdbcType=VARCHAR},
       </if>
+      <if test="primaryCurrency != null">
+        primary_currency = #{primaryCurrency,jdbcType=VARCHAR},
+      </if>
       <if test="paypayFlag != null">
         paypay_flag = #{paypayFlag,jdbcType=TINYINT},
       </if>
@@ -447,6 +459,12 @@
       <if test="updatedAt != null">
         updated_at = #{updatedAt,jdbcType=TIMESTAMP},
       </if>
+      <if test="isDeleted != null">
+        is_deleted = #{isDeleted,jdbcType=TINYINT},
+      </if>
+      <if test="deletedAt != null">
+        deleted_at = #{deletedAt,jdbcType=TIMESTAMP},
+      </if>
     </set>
     where ID = #{id,jdbcType=INTEGER}
   </update>
@@ -474,5 +492,27 @@
       created_at = #{createdAt,jdbcType=TIMESTAMP},
       updated_at = #{updatedAt,jdbcType=TIMESTAMP}
     where ID = #{id,jdbcType=INTEGER}
+  </update>
+
+  <!-- V40: GDPR - Anonymize user data (soft delete) -->
+  <update id="anonymizeUser">
+    UPDATE user SET
+      email = CONCAT('deleted_', #{userId}, '@deleted.local'),
+      google_id = NULL,
+      password = NULL,
+      secondname = NULL,
+      firstname = NULL,
+      nickname = CONCAT('已注销用户#', #{userId}),
+      avatar_url = NULL,
+      paypay_flag = 0,
+      paypay_account = NULL,
+      bank_flag = 0,
+      bank_name = NULL,
+      bank_branch = NULL,
+      bank_account = NULL,
+      is_deleted = 1,
+      deleted_at = NOW(),
+      updated_at = NOW()
+    WHERE ID = #{userId}
   </update>
 </mapper>

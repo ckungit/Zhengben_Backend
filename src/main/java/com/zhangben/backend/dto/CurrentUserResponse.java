@@ -9,6 +9,7 @@ public class CurrentUserResponse {
     private String secondname;
     private Byte paypayFlag;
     private Byte bankFlag;
+    private String primaryCurrency;
 
     // 无参构造函数
     public CurrentUserResponse() {
@@ -31,6 +32,7 @@ public class CurrentUserResponse {
     public String getSecondname() { return secondname; }
     public Byte getPaypayFlag() { return paypayFlag; }
     public Byte getBankFlag() { return bankFlag; }
+    public String getPrimaryCurrency() { return primaryCurrency; }
 
     // Setters
     public void setId(Integer id) { this.id = id; }
@@ -41,4 +43,5 @@ public class CurrentUserResponse {
     public void setSecondname(String secondname) { this.secondname = secondname; }
     public void setPaypayFlag(Byte paypayFlag) { this.paypayFlag = paypayFlag; }
     public void setBankFlag(Byte bankFlag) { this.bankFlag = bankFlag; }
+    public void setPrimaryCurrency(String primaryCurrency) { this.primaryCurrency = primaryCurrency; }
 }

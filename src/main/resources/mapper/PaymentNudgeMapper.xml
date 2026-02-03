@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhangben.backend.mapper.PaymentNudgeMapper">
+
+    <resultMap id="BaseResultMap" type="com.zhangben.backend.model.PaymentNudge">
+        <id column="id" property="id"/>
+        <result column="creditor_id" property="creditorId"/>
+        <result column="debtor_id" property="debtorId"/>
+        <result column="outcome_id" property="outcomeId"/>
+        <result column="created_at" property="createdAt"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.zhangben.backend.model.PaymentNudge" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO payment_nudge (creditor_id, debtor_id, outcome_id, created_at)
+        VALUES (#{creditorId}, #{debtorId}, #{outcomeId}, NOW())
+    </insert>
+
+    <select id="countRecentNudges" resultType="int">
+        SELECT COUNT(*) FROM payment_nudge
+        WHERE creditor_id = #{creditorId}
+          AND debtor_id = #{debtorId}
+          AND created_at >= #{since}
+    </select>
+
+    <select id="selectLatestNudge" resultMap="BaseResultMap">
+        SELECT * FROM payment_nudge
+        WHERE creditor_id = #{creditorId}
+          AND debtor_id = #{debtorId}
+        ORDER BY created_at DESC
+        LIMIT 1
+    </select>
+
+    <delete id="deleteOldRecords">
+        DELETE FROM payment_nudge WHERE created_at &lt; #{before}
+    </delete>
+
+</mapper>

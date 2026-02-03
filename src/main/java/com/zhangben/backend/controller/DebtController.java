@@ -3,6 +3,7 @@ package com.zhangben.backend.controller;
 import cn.dev33.satoken.stp.StpUtil;
 import com.zhangben.backend.dto.*;
 import com.zhangben.backend.service.DebtService;
+import com.zhangben.backend.service.NudgeService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -14,6 +15,9 @@ public class DebtController {
 
     @Autowired
     private DebtService debtService;
+
+    @Autowired
+    private NudgeService nudgeService;
 
     /**
      * 1. 用户自身全部欠款总览
@@ -143,5 +147,47 @@ public class DebtController {
     public List<CreditorForOnBehalfItem> getCreditorsForOnBehalf() {
         Integer userId = StpUtil.getLoginIdAsInt();
         return debtService.getCreditorsWithFriendDebts(userId);
+    }
+
+    /**
+     * V41: 催促还款
+     * 向债务人发送还款提醒（24小时内只能催促一次）
+     */
+    @PostMapping("/nudge/{debtorId}")
+    public NudgeService.NudgeResult sendNudge(@PathVariable Integer debtorId) {
+        Integer userId = StpUtil.getLoginIdAsInt();
+        return nudgeService.sendNudge(userId, debtorId);
+    }
+
+    /**
+     * V41: 检查是否可以催促
+     */
+    @GetMapping("/nudge/{debtorId}/status")
+    public NudgeStatusResponse getNudgeStatus(@PathVariable Integer debtorId) {
+        Integer userId = StpUtil.getLoginIdAsInt();
+        boolean canNudge = nudgeService.canNudge(userId, debtorId);
+        long nextNudgeTime = nudgeService.getNextNudgeTime(userId, debtorId);
+        return new NudgeStatusResponse(canNudge, nextNudgeTime);
+    }
+
+    /**
+     * V41: 催促状态响应
+     */
+    public static class NudgeStatusResponse {
+        private boolean canNudge;
+        private long nextNudgeTime;
+
+        public NudgeStatusResponse(boolean canNudge, long nextNudgeTime) {
+            this.canNudge = canNudge;
+            this.nextNudgeTime = nextNudgeTime;
+        }
+
+        public boolean isCanNudge() {
+            return canNudge;
+        }
+
+        public long getNextNudgeTime() {
+            return nextNudgeTime;
+        }
     }
 }

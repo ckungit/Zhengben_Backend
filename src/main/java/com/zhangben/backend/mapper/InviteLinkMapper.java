@@ -24,4 +24,9 @@ public interface InviteLinkMapper {
     int insertUsage(@Param("inviteId") Integer inviteId, @Param("userId") Integer userId);
     
     int checkUsage(@Param("inviteId") Integer inviteId, @Param("userId") Integer userId);
+
+    /**
+     * V40: Delete all invite links created by a user (GDPR)
+     */
+    int deleteByCreatorId(@Param("creatorId") Integer creatorId);
 }

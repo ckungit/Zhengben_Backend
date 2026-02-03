@@ -48,4 +48,9 @@
         SELECT COUNT(*) FROM invite_usage WHERE invite_id = #{inviteId} AND user_id = #{userId}
     </select>
 
+    <!-- V40: GDPR - Delete all invite links created by a user -->
+    <delete id="deleteByCreatorId">
+        DELETE FROM invite_link WHERE creator_id = #{creatorId}
+    </delete>
+
 </mapper>
