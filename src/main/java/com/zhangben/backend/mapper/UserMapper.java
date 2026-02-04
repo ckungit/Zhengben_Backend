@@ -113,4 +113,9 @@ public interface UserMapper {
      * V42: 重置所有用户的提醒发送状态
      */
     int resetSubscriptionReminderStatus();
+
+    /**
+     * V43: 按 Microsoft ID 查找用户
+     */
+    User selectByMicrosoftId(@Param("microsoftId") String microsoftId);
 }

@@ -32,6 +32,9 @@ cors.max-age=3600
 # Google SSO
 google.client-id=${GOOGLE_CLIENT_ID}
 
+# V43: Microsoft SSO (在 Azure Portal 注册应用后填入)
+microsoft.client-id=
+
 # --------------------------------
 # Redis 配置 (Sa-Token 会话存储)
 # 开发环境连接本地或服务器 Redis
@@ -48,12 +51,22 @@ spring.data.redis.timeout=10s
 app.base-url=http://localhost:5173
 
 # --------------------------------
-# V15: Brevo 邮件服务配置 (开发环境)
-# 可设置真实API Key进行测试，或留空跳过邮件发送
+# V15/V34: 邮件服务配置 (开发环境)
+# 开发环境永远使用 Mock，不发送真实邮件
 # --------------------------------
-brevo.api-key=no_use_email
+mail.enabled=true
+app.mail.provider=mock
+app.mail.fallback-enabled=false
+
+# Brevo 配置 (开发环境不使用)
+brevo.api-key=
 brevo.sender-email=noreply@aabillpay.com
 brevo.sender-name=PayYou
+
+# Resend 配置 (开发环境不使用)
+resend.api-key=
+resend.sender-email=noreply@aabillpay.com
+resend.sender-name=PayYou
 
 # --------------------------------
 # V24: Cloudflare R2 存储配置 (开发环境)
@@ -64,3 +77,8 @@ r2.access-key=your_dev_access_key
 r2.secret-key=your_dev_secret_key
 r2.bucket-name=avatars-dev
 r2.public-url=https://image.aabillpay.com
+
+# --------------------------------
+# V42: 功能开关 (开发环境)
+# --------------------------------
+subscription.enabled=true

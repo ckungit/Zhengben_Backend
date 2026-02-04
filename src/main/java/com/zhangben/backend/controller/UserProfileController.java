@@ -76,8 +76,9 @@ public class UserProfileController {
         resp.setAvatarUrl(user.getAvatarUrl());
         resp.setPreferredLanguage(user.getPreferredLanguage());
         resp.setPrimaryCurrency(user.getPrimaryCurrency() != null ? user.getPrimaryCurrency() : "JPY");
-        // V43: Google 绑定状态
+        // V43: Google/Microsoft 绑定状态
         resp.setGoogleId(user.getGoogleId());
+        resp.setMicrosoftId(user.getMicrosoftId());
 
         return resp;
     }
@@ -333,6 +334,64 @@ public class UserProfileController {
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("message", "绑定失败：" + e.getMessage()));
         }
+    }
+
+    /**
+     * V43: 绑定 Microsoft 账号
+     */
+    @PostMapping("/microsoft/bind")
+    public ResponseEntity<?> bindMicrosoftAccount(@RequestBody Map<String, String> request) {
+        Integer userId = StpUtil.getLoginIdAsInt();
+        User currentUser = userMapper.selectByPrimaryKey(userId);
+
+        if (currentUser.getMicrosoftId() != null && !currentUser.getMicrosoftId().isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "已绑定 Microsoft 账号"));
+        }
+
+        String microsoftId = request.get("microsoftId");
+        if (microsoftId == null || microsoftId.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "缺少 Microsoft ID"));
+        }
+
+        // 检查该 Microsoft 账号是否已被其他用户绑定
+        User existingUser = userMapper.selectByMicrosoftId(microsoftId);
+        if (existingUser != null) {
+            return ResponseEntity.badRequest().body(Map.of("message", "该 Microsoft 账号已被其他用户绑定"));
+        }
+
+        User updateUser = new User();
+        updateUser.setId(userId);
+        updateUser.setMicrosoftId(microsoftId);
+        updateUser.setUpdatedAt(LocalDateTime.now());
+        userMapper.updateByPrimaryKeySelective(updateUser);
+
+        return ResponseEntity.ok(Map.of("message", "绑定成功"));
+    }
+
+    /**
+     * V43: 解绑 Microsoft 账号
+     */
+    @PostMapping("/microsoft/unbind")
+    public ResponseEntity<?> unbindMicrosoftAccount() {
+        Integer userId = StpUtil.getLoginIdAsInt();
+        User currentUser = userMapper.selectByPrimaryKey(userId);
+
+        if (currentUser.getMicrosoftId() == null || currentUser.getMicrosoftId().isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "尚未绑定 Microsoft 账号"));
+        }
+
+        if ((currentUser.getPassword() == null || currentUser.getPassword().isEmpty()) &&
+            (currentUser.getGoogleId() == null || currentUser.getGoogleId().isEmpty())) {
+            return ResponseEntity.badRequest().body(Map.of("message", "请先设置密码或绑定其他登录方式后再解绑"));
+        }
+
+        User updateUser = new User();
+        updateUser.setId(userId);
+        updateUser.setMicrosoftId("");
+        updateUser.setUpdatedAt(LocalDateTime.now());
+        userMapper.updateByPrimaryKeySelective(updateUser);
+
+        return ResponseEntity.ok(Map.of("message", "解绑成功"));
     }
 
     /**

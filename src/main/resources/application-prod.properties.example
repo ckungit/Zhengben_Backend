@@ -37,6 +37,10 @@ cors.max-age=3600
 # Google SSO
 google.client-id=${GOOGLE_CLIENT_ID}
 
+# V43: Microsoft SSO
+microsoft.client-id=${MICROSOFT_CLIENT_ID:}
+
+
 # --------------------------------
 # Redis 配置 (Sa-Token 会话存储)
 # --------------------------------
@@ -55,11 +59,27 @@ spring.data.redis.lettuce.pool.min-idle=1
 app.base-url=${APP_BASE_URL:https://www.aabillpay.com}
 
 # --------------------------------
-# V15: Brevo 邮件服务配置
+# V15/V34: 邮件服务配置 (生产环境)
 # --------------------------------
-brevo.api-key=${BREVO_API_KEY}
+# 邮件总开关 (紧急情况设为 false)
+mail.enabled=${MAIL_ENABLED:true}
+
+# 首选供应商: brevo | resend | mock
+# 当前优先使用 Resend，Brevo 作为备用
+app.mail.provider=${MAIL_PROVIDER:resend}
+
+# 自动降级 (resend 失败自动尝试 brevo，再失败使用 mock)
+app.mail.fallback-enabled=${MAIL_FALLBACK_ENABLED:true}
+
+# Brevo 配置 (备用)
+brevo.api-key=${BREVO_API_KEY:}
 brevo.sender-email=noreply@aabillpay.com
 brevo.sender-name=PayYou
+
+# Resend 配置 (首选)
+resend.api-key=${RESEND_API_KEY:}
+resend.sender-email=noreply@aabillpay.com
+resend.sender-name=PayYou
 
 # --------------------------------
 # V24: Cloudflare R2 存储配置 (生产环境)
@@ -70,3 +90,9 @@ r2.access-key=${R2_ACCESS_KEY}
 r2.secret-key=${R2_SECRET_KEY}
 r2.bucket-name=${R2_BUCKET_NAME:avatars}
 r2.public-url=https://image.aabillpay.com
+
+# --------------------------------
+# V42: 功能开关 (生产环境)
+# 暂时关闭会员功能
+# --------------------------------
+subscription.enabled=false

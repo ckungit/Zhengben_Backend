@@ -30,6 +30,8 @@ public class SaTokenConfig implements WebMvcConfigurer {
                     .notMatch("/api/auth/google/link-existing-account")
                     // Google SSO 登录不拦截
                     .notMatch("/api/auth/google/login")
+                    // V43: Microsoft SSO 登录不拦截
+                    .notMatch("/api/auth/microsoft/login")
 
                     // V15: 密码重置相关接口不拦截
                     .notMatch("/api/auth/forgot-password", "/api/auth/verify-reset-token", "/api/auth/reset-password")
