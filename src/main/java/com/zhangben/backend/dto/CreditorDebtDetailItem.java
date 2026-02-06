@@ -12,6 +12,7 @@ public class CreditorDebtDetailItem {
     private String locationText;
     private Boolean isRepayment; // 是否是还款记录
     private Integer confirmStatus; // 确认状态: 0=待确认, 1=已确认, null=非还款记录
+    private Boolean isOffset; // 是否是抵消记录
 
     public Integer getOutcomeId() {
         return outcomeId;
@@ -75,5 +76,13 @@ public class CreditorDebtDetailItem {
 
     public void setConfirmStatus(Integer confirmStatus) {
         this.confirmStatus = confirmStatus;
+    }
+
+    public Boolean getIsOffset() {
+        return isOffset;
+    }
+
+    public void setIsOffset(Boolean isOffset) {
+        this.isOffset = isOffset;
     }
 }

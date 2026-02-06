@@ -12,6 +12,8 @@ public class RepayFifoResponse {
     private boolean allSettled;       // 该债权人所有账清
     private Long remainingDebt;       // 剩余欠款 (cents)
     private Long totalRepaidThisTime; // 本次还款总额
+    private boolean hasConflict;
+    private List<ConflictItem> conflictItems;
 
     public String getMessage() {
         return message;
@@ -51,5 +53,21 @@ public class RepayFifoResponse {
 
     public void setTotalRepaidThisTime(Long totalRepaidThisTime) {
         this.totalRepaidThisTime = totalRepaidThisTime;
+    }
+
+    public boolean isHasConflict() {
+        return hasConflict;
+    }
+
+    public void setHasConflict(boolean hasConflict) {
+        this.hasConflict = hasConflict;
+    }
+
+    public List<ConflictItem> getConflictItems() {
+        return conflictItems;
+    }
+
+    public void setConflictItems(List<ConflictItem> conflictItems) {
+        this.conflictItems = conflictItems;
     }
 }

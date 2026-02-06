@@ -10,6 +10,7 @@ public class DebtorDebtDetailItem {
     private Long amount;
     private LocalDateTime payDatetime;
     private String locationText;
+    private Boolean isOffset; // 是否是抵消记录
 
     public Integer getOutcomeId() {
         return outcomeId;
@@ -57,5 +58,13 @@ public class DebtorDebtDetailItem {
 
     public void setLocationText(String locationText) {
         this.locationText = locationText;
+    }
+
+    public Boolean getIsOffset() {
+        return isOffset;
+    }
+
+    public void setIsOffset(Boolean isOffset) {
+        this.isOffset = isOffset;
     }
 }

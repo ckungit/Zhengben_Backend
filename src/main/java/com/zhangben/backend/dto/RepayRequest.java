@@ -23,6 +23,12 @@ public class RepayRequest {
     // V20: 还款时间（可选，不传则用当前时间）
     private LocalDateTime payDatetime;
 
+    // 债权人录入时指定债务人
+    private Integer debtorId;
+
+    // 跳过冲突检测（用户选择"仍然提交"）
+    private Boolean skipConflictCheck;
+
     public Integer getCreditorId() {
         return creditorId;
     }
@@ -61,5 +67,21 @@ public class RepayRequest {
 
     public void setPayDatetime(LocalDateTime payDatetime) {
         this.payDatetime = payDatetime;
+    }
+
+    public Integer getDebtorId() {
+        return debtorId;
+    }
+
+    public void setDebtorId(Integer debtorId) {
+        this.debtorId = debtorId;
+    }
+
+    public Boolean getSkipConflictCheck() {
+        return skipConflictCheck;
+    }
+
+    public void setSkipConflictCheck(Boolean skipConflictCheck) {
+        this.skipConflictCheck = skipConflictCheck;
     }
 }
