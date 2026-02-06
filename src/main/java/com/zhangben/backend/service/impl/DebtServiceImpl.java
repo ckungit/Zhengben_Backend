@@ -1089,9 +1089,23 @@ public class DebtServiceImpl implements DebtService {
             }
         }
 
-        // 筛选与当前用户相关的
+        // 构建与当前用户有直接债务关系的用户集合
+        Set<Integer> relatedUsers = new HashSet<>();
+        relatedUsers.add(userId);
+        for (Map.Entry<String, Long> e : netMap.entrySet()) {
+            if (e.getValue() <= 0) continue;
+            String[] parts = e.getKey().split("-");
+            Integer debtor = Integer.valueOf(parts[0]);
+            Integer creditor = Integer.valueOf(parts[1]);
+            if (debtor.equals(userId) || creditor.equals(userId)) {
+                relatedUsers.add(debtor);
+                relatedUsers.add(creditor);
+            }
+        }
+
+        // 筛选双方都在用户债务圈内的结算路径
         List<SettlementItem> mySettlements = settlements.stream()
-                .filter(s -> s.getFromId().equals(userId) || s.getToId().equals(userId))
+                .filter(s -> relatedUsers.contains(s.getFromId()) && relatedUsers.contains(s.getToId()))
                 .collect(Collectors.toList());
 
         SettlementResponse resp = new SettlementResponse();
