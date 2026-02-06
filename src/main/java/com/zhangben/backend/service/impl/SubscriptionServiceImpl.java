@@ -198,7 +198,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
                     <tr>
                         <td style="padding:20px 30px;background:#f5f5f7;text-align:center;">
                             <p style="color:#86868b;font-size:12px;margin:0;">
-                                Pay友 (AA Bill Pay) · No Cookie, Privacy First
+                                Pay友 (AA Bill Pay) · Essential Cookie Only, Privacy First
                             </p>
                         </td>
                     </tr>

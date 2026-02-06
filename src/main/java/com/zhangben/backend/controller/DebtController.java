@@ -51,10 +51,9 @@ public class DebtController {
      *    - payDatetime = LocalDateTime.now()
      */
     @PostMapping("/repay")
-    public String repay(@RequestBody RepayRequest req) {
+    public RepayFifoResponse repay(@RequestBody RepayRequest req) {
         Integer userId = StpUtil.getLoginIdAsInt();
-        debtService.repay(req, userId);
-        return "还款记录成功";
+        return debtService.repayWithFifo(req, userId);
     }
 
     /**
@@ -150,13 +149,23 @@ public class DebtController {
     }
 
     /**
+     * 获取最优结算方案（全局债务简化）
+     */
+    @GetMapping("/settlements")
+    public SettlementResponse getMinimizedSettlements() {
+        Integer userId = StpUtil.getLoginIdAsInt();
+        return debtService.getMinimizedSettlements(userId);
+    }
+
+    /**
      * V41: 催促还款
      * 向债务人发送还款提醒（24小时内只能催促一次）
      */
     @PostMapping("/nudge/{debtorId}")
-    public NudgeService.NudgeResult sendNudge(@PathVariable Integer debtorId) {
+    public NudgeService.NudgeResult sendNudge(@PathVariable Integer debtorId,
+                                               @RequestParam(defaultValue = "false") boolean anonymous) {
         Integer userId = StpUtil.getLoginIdAsInt();
-        return nudgeService.sendNudge(userId, debtorId);
+        return nudgeService.sendNudge(userId, debtorId, anonymous);
     }
 
     /**

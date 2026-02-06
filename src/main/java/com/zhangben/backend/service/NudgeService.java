@@ -9,9 +9,10 @@ public interface NudgeService {
      * 发送催促提醒
      * @param creditorId 债权人ID（当前用户）
      * @param debtorId 债务人ID（被催促的人）
+     * @param anonymous 是否匿名
      * @return 催促结果
      */
-    NudgeResult sendNudge(Integer creditorId, Integer debtorId);
+    NudgeResult sendNudge(Integer creditorId, Integer debtorId, boolean anonymous);
 
     /**
      * 检查是否可以催促（24小时限制）
@@ -36,6 +37,7 @@ public interface NudgeService {
         private boolean success;
         private String message;
         private long nextNudgeTime; // 下次可催促的时间戳
+        private boolean anonymous;
 
         public static NudgeResult success() {
             NudgeResult result = new NudgeResult();
@@ -82,6 +84,14 @@ public interface NudgeService {
 
         public void setNextNudgeTime(long nextNudgeTime) {
             this.nextNudgeTime = nextNudgeTime;
+        }
+
+        public boolean isAnonymous() {
+            return anonymous;
+        }
+
+        public void setAnonymous(boolean anonymous) {
+            this.anonymous = anonymous;
         }
     }
 }

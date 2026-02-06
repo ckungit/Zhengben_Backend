@@ -1017,6 +1017,91 @@ public class DebtServiceImpl implements DebtService {
         }
     }
 
+    @Override
+    public SettlementResponse getMinimizedSettlements(Integer userId) {
+        Map<String, Long> netMap = buildDebtMap();
+
+        // 原始转账笔数
+        int originalCount = 0;
+        for (Long v : netMap.values()) {
+            if (v > 0) originalCount++;
+        }
+
+        // 计算每个用户的净余额: 正值=应收, 负值=应付
+        Map<Integer, Long> balanceMap = new HashMap<>();
+        for (Map.Entry<String, Long> e : netMap.entrySet()) {
+            if (e.getValue() <= 0) continue;
+            String[] parts = e.getKey().split("-");
+            Integer debtor = Integer.valueOf(parts[0]);
+            Integer creditor = Integer.valueOf(parts[1]);
+            balanceMap.put(creditor, balanceMap.getOrDefault(creditor, 0L) + e.getValue());
+            balanceMap.put(debtor, balanceMap.getOrDefault(debtor, 0L) - e.getValue());
+        }
+
+        // 分离债权人和债务人
+        List<int[]> creditors = new ArrayList<>(); // [userId, balance]
+        List<int[]> debtors = new ArrayList<>();
+        for (Map.Entry<Integer, Long> e : balanceMap.entrySet()) {
+            long bal = e.getValue();
+            if (bal > 0) {
+                creditors.add(new int[]{e.getKey(), (int) bal});
+            } else if (bal < 0) {
+                debtors.add(new int[]{e.getKey(), (int) (-bal)});
+            }
+        }
+
+        // 按金额降序
+        creditors.sort((a, b) -> Integer.compare(b[1], a[1]));
+        debtors.sort((a, b) -> Integer.compare(b[1], a[1]));
+
+        // 贪心匹配
+        List<SettlementItem> settlements = new ArrayList<>();
+        int ci = 0, di = 0;
+        while (ci < creditors.size() && di < debtors.size()) {
+            int[] cr = creditors.get(ci);
+            int[] dr = debtors.get(di);
+            int transfer = Math.min(cr[1], dr[1]);
+
+            SettlementItem item = new SettlementItem();
+            item.setFromId(dr[0]);
+            item.setToId(cr[0]);
+            item.setAmount((long) transfer);
+            settlements.add(item);
+
+            cr[1] -= transfer;
+            dr[1] -= transfer;
+            if (cr[1] == 0) ci++;
+            if (dr[1] == 0) di++;
+        }
+
+        // 填充用户信息
+        Map<Integer, User> userCache = new HashMap<>();
+        for (SettlementItem s : settlements) {
+            User from = userCache.computeIfAbsent(s.getFromId(), userMapper::selectByPrimaryKey);
+            User to = userCache.computeIfAbsent(s.getToId(), userMapper::selectByPrimaryKey);
+            if (from != null) {
+                s.setFromName(from.getNickname());
+                s.setFromAvatarUrl(from.getAvatarUrl());
+            }
+            if (to != null) {
+                s.setToName(to.getNickname());
+                s.setToAvatarUrl(to.getAvatarUrl());
+            }
+        }
+
+        // 筛选与当前用户相关的
+        List<SettlementItem> mySettlements = settlements.stream()
+                .filter(s -> s.getFromId().equals(userId) || s.getToId().equals(userId))
+                .collect(Collectors.toList());
+
+        SettlementResponse resp = new SettlementResponse();
+        resp.setSettlements(settlements);
+        resp.setMySettlements(mySettlements);
+        resp.setOriginalTransferCount(originalCount);
+        resp.setMinimizedTransferCount(settlements.size());
+        return resp;
+    }
+
     /**
      * 获取当前用户的好友ID列表
      */
@@ -1183,5 +1268,168 @@ public class DebtServiceImpl implements DebtService {
         result.sort((a, b) -> Long.compare(b.getTotalFriendDebt(), a.getTotalFriendDebt()));
 
         return result;
+    }
+
+    @Override
+    @Transactional
+    public RepayFifoResponse repayWithFifo(RepayRequest req, Integer userId) {
+        Integer creditorId = req.getCreditorId();
+
+        // 1. 加载所有未删除的 outcomes
+        List<Outcome> allOutcomes = loadAllOutcomes();
+
+        // 2. 筛选：creditor 付款、debtor(userId) 参与的消费 (repayFlag=1)，按 pay_datetime ASC
+        List<long[]> expenses = new ArrayList<>(); // [outcomeId, shareAmount]
+        List<Outcome> expenseOutcomes = new ArrayList<>();
+        for (Outcome o : allOutcomes) {
+            if (o.getRepayFlag() != (byte) 1) continue;
+            if (!o.getPayerUserid().equals(creditorId)) continue;
+            List<OutcomeParticipant> ps = loadParticipants(o.getId());
+            for (OutcomeParticipant p : ps) {
+                if (p.getUserId().equals(userId)) {
+                    Integer shares = p.getShares() != null ? p.getShares() : 1;
+                    long shareAmount = o.getPerAmount() * shares;
+                    expenses.add(new long[]{o.getId(), shareAmount});
+                    expenseOutcomes.add(o);
+                    break;
+                }
+            }
+        }
+        // 按 pay_datetime ASC 排序
+        List<Integer> sortedIndices = new ArrayList<>();
+        for (int i = 0; i < expenseOutcomes.size(); i++) sortedIndices.add(i);
+        sortedIndices.sort((a, b) -> {
+            LocalDateTime dtA = expenseOutcomes.get(a).getPayDatetime();
+            LocalDateTime dtB = expenseOutcomes.get(b).getPayDatetime();
+            if (dtA == null && dtB == null) return 0;
+            if (dtA == null) return -1;
+            if (dtB == null) return 1;
+            return dtA.compareTo(dtB);
+        });
+        List<long[]> sortedExpenses = new ArrayList<>();
+        List<Outcome> sortedExpenseOutcomes = new ArrayList<>();
+        for (int idx : sortedIndices) {
+            sortedExpenses.add(expenses.get(idx));
+            sortedExpenseOutcomes.add(expenseOutcomes.get(idx));
+        }
+
+        // 3. 筛选：userId→creditor 的已确认还款 (repayFlag=2)，按 pay_datetime ASC
+        List<long[]> repayments = new ArrayList<>(); // [outcomeId, amount]
+        for (Outcome o : allOutcomes) {
+            if (o.getRepayFlag() != (byte) 2) continue;
+            Integer actualDebtor = o.getOnBehalfOf() != null ? o.getOnBehalfOf() : o.getPayerUserid();
+            if (!actualDebtor.equals(userId) || !o.getTargetUserid().equals(creditorId)) continue;
+            // 只计已确认
+            OutcomeParticipant participant = outcomeParticipantMapper.selectByOutcomeAndUser(o.getId(), creditorId);
+            boolean confirmed = participant != null && participant.getConfirmStatus() != null && participant.getConfirmStatus() == 1;
+            if (confirmed) {
+                repayments.add(new long[]{o.getId(), o.getAmount()});
+            }
+        }
+        // 按 pay_datetime ASC 排序
+        repayments.sort((a, b) -> {
+            Outcome oA = outcomeMapper.selectByPrimaryKey((int) a[0]);
+            Outcome oB = outcomeMapper.selectByPrimaryKey((int) b[0]);
+            LocalDateTime dtA = oA != null ? oA.getPayDatetime() : null;
+            LocalDateTime dtB = oB != null ? oB.getPayDatetime() : null;
+            if (dtA == null && dtB == null) return 0;
+            if (dtA == null) return -1;
+            if (dtB == null) return 1;
+            return dtA.compareTo(dtB);
+        });
+
+        // 4. FIFO 分配已还金额到各 expense
+        long[] previouslyRepaidArr = new long[sortedExpenses.size()];
+        long repaidPool = 0;
+        for (long[] rep : repayments) {
+            repaidPool += rep[1];
+        }
+        long remaining = repaidPool;
+        for (int i = 0; i < sortedExpenses.size(); i++) {
+            long shareAmount = sortedExpenses.get(i)[1];
+            long alloc = Math.min(shareAmount, remaining);
+            previouslyRepaidArr[i] = alloc;
+            remaining -= alloc;
+            if (remaining <= 0) break;
+        }
+
+        // 5. 执行实际还款（调用现有 repay 方法）
+        repay(req, userId);
+
+        // 6. FIFO 分配本次新还款金额
+        long newAmount = req.getAmount();
+        long newAmountLeft = newAmount;
+        long[] newlyRepaidArr = new long[sortedExpenses.size()];
+
+        for (int i = 0; i < sortedExpenses.size(); i++) {
+            if (newAmountLeft <= 0) break;
+            long shareAmount = sortedExpenses.get(i)[1];
+            long alreadyPaid = previouslyRepaidArr[i];
+            long gap = shareAmount - alreadyPaid;
+            if (gap <= 0) continue;
+            long alloc = Math.min(gap, newAmountLeft);
+            newlyRepaidArr[i] = alloc;
+            newAmountLeft -= alloc;
+        }
+
+        // 7. 构建 FifoItem 列表
+        List<FifoItem> settledBills = new ArrayList<>();
+        boolean allSettled = true;
+        long totalDebt = 0;
+
+        for (int i = 0; i < sortedExpenses.size(); i++) {
+            long shareAmount = sortedExpenses.get(i)[1];
+            long prevRepaid = previouslyRepaidArr[i];
+            long newRepaid = newlyRepaidArr[i];
+            long totalRepaid = prevRepaid + newRepaid;
+            double progress = shareAmount > 0 ? (double) totalRepaid / shareAmount : 1.0;
+            if (progress > 1.0) progress = 1.0;
+
+            String status;
+            if (newRepaid == 0) {
+                status = totalRepaid >= shareAmount ? "COMPLETED" : "UNCHANGED";
+            } else {
+                status = totalRepaid >= shareAmount ? "COMPLETED" : "PARTIAL";
+            }
+
+            if (totalRepaid < shareAmount) {
+                allSettled = false;
+            }
+            totalDebt += shareAmount;
+
+            Outcome o = sortedExpenseOutcomes.get(i);
+            FifoItem item = new FifoItem();
+            item.setOutcomeId(o.getId());
+            item.setOriginalAmount(shareAmount);
+            item.setPreviouslyRepaid(prevRepaid);
+            item.setNewlyRepaid(newRepaid);
+            item.setStatus(status);
+            item.setProgress(progress);
+            item.setComment(o.getComment());
+            item.setPayDatetime(o.getPayDatetime() != null ? o.getPayDatetime().toString() : null);
+
+            if (o.getStyleId() != null) {
+                PayStyle style = payStyleMapper.selectByPrimaryKey(o.getStyleId());
+                item.setCategoryName(style != null ? style.getStyleName() : "未分类");
+            } else {
+                item.setCategoryName("未分类");
+            }
+
+            settledBills.add(item);
+        }
+
+        // 8. 构建响应
+        long totalPreviouslyRepaid = 0;
+        for (long v : previouslyRepaidArr) totalPreviouslyRepaid += v;
+        long remainingDebt = totalDebt - totalPreviouslyRepaid - newAmount;
+        if (remainingDebt < 0) remainingDebt = 0;
+
+        RepayFifoResponse response = new RepayFifoResponse();
+        response.setMessage("还款记录成功");
+        response.setSettledBills(settledBills);
+        response.setAllSettled(allSettled);
+        response.setRemainingDebt(remainingDebt);
+        response.setTotalRepaidThisTime(newAmount);
+        return response;
     }
 }

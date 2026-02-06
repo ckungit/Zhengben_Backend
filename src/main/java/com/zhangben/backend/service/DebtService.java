@@ -56,4 +56,14 @@ public interface DebtService {
      * V32: 获取我发起的待确认还款（作为债务人）
      */
     List<MyPendingRepaymentItem> getMyPendingRepayments(Integer debtorId);
+
+    /**
+     * 获取最优结算方案（全局债务简化）
+     */
+    SettlementResponse getMinimizedSettlements(Integer userId);
+
+    /**
+     * FIFO 销账还款：按时间先后对冲旧账单，返回冲销明细
+     */
+    RepayFifoResponse repayWithFifo(RepayRequest req, Integer userId);
 }

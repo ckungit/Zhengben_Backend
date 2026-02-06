@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhangben.backend.mapper.PredictionMapper">
+
+    <resultMap id="KalmanFilterStateMap" type="com.zhangben.backend.model.KalmanFilterState">
+        <id column="id" property="id" />
+        <result column="user_id" property="userId" />
+        <result column="state_vector" property="stateVector" />
+        <result column="covariance_matrix" property="covarianceMatrix" />
+        <result column="predicted_next_month" property="predictedNextMonth" />
+        <result column="predicted_confidence_low" property="predictedConfidenceLow" />
+        <result column="predicted_confidence_high" property="predictedConfidenceHigh" />
+        <result column="last_observation_month" property="lastObservationMonth" />
+        <result column="consecutive_months" property="consecutiveMonths" />
+        <result column="total_observations" property="totalObservations" />
+        <result column="created_at" property="createdAt" />
+        <result column="updated_at" property="updatedAt" />
+    </resultMap>
+
+    <resultMap id="UserMonthlySpendingMap" type="com.zhangben.backend.model.UserMonthlySpending">
+        <id column="id" property="id" />
+        <result column="user_id" property="userId" />
+        <result column="month" property="month" />
+        <result column="total_spending" property="totalSpending" />
+        <result column="transaction_count" property="transactionCount" />
+        <result column="created_at" property="createdAt" />
+        <result column="updated_at" property="updatedAt" />
+    </resultMap>
+
+    <!-- 查询用户的卡尔曼滤波状态 -->
+    <select id="selectByUserId" resultMap="KalmanFilterStateMap">
+        SELECT * FROM kalman_filter_state WHERE user_id = #{userId}
+    </select>
+
+    <!-- 插入卡尔曼状态 -->
+    <insert id="insertKalmanState" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO kalman_filter_state (user_id, state_vector, covariance_matrix,
+            predicted_next_month, predicted_confidence_low, predicted_confidence_high,
+            last_observation_month, consecutive_months, total_observations)
+        VALUES (#{userId}, #{stateVector}, #{covarianceMatrix},
+            #{predictedNextMonth}, #{predictedConfidenceLow}, #{predictedConfidenceHigh},
+            #{lastObservationMonth}, #{consecutiveMonths}, #{totalObservations})
+    </insert>
+
+    <!-- 更新卡尔曼状态 -->
+    <update id="updateByUserId">
+        UPDATE kalman_filter_state
+        SET state_vector = #{stateVector},
+            covariance_matrix = #{covarianceMatrix},
+            predicted_next_month = #{predictedNextMonth},
+            predicted_confidence_low = #{predictedConfidenceLow},
+            predicted_confidence_high = #{predictedConfidenceHigh},
+            last_observation_month = #{lastObservationMonth},
+            consecutive_months = #{consecutiveMonths},
+            total_observations = #{totalObservations}
+        WHERE user_id = #{userId}
+    </update>
+
+    <!-- 查询用户所有月度支出记录 -->
+    <select id="selectMonthlySpending" resultMap="UserMonthlySpendingMap">
+        SELECT * FROM user_monthly_spending
+        WHERE user_id = #{userId}
+        ORDER BY month ASC
+    </select>
+
+    <!-- Upsert 月度支出 -->
+    <insert id="upsertMonthlySpending">
+        INSERT INTO user_monthly_spending (user_id, month, total_spending, transaction_count)
+        VALUES (#{userId}, #{month}, #{totalSpending}, #{transactionCount})
+        ON DUPLICATE KEY UPDATE
+            total_spending = VALUES(total_spending),
+            transaction_count = VALUES(transaction_count)
+    </insert>
+
+    <!-- 从 outcome 表实时聚合月度支出 -->
+    <select id="aggregateMonthlySpending" resultMap="UserMonthlySpendingMap">
+        SELECT
+            NULL as id,
+            p.user_id as user_id,
+            DATE_FORMAT(o.pay_datetime, '%Y-%m') as month,
+            SUM(o.per_amount) as total_spending,
+            COUNT(*) as transaction_count,
+            NULL as created_at,
+            NULL as updated_at
+        FROM outcome o
+        INNER JOIN outcome_participant p ON o.id = p.outcome_id
+        WHERE p.user_id = #{userId}
+            AND o.deleted_flag = 0
+            AND o.repay_flag = 1
+        GROUP BY p.user_id, DATE_FORMAT(o.pay_datetime, '%Y-%m')
+        ORDER BY month ASC
+    </select>
+
+    <!-- 聚合固定支出（is_fixed=true 的分类） -->
+    <select id="aggregateFixedSpending" resultMap="UserMonthlySpendingMap">
+        SELECT
+            NULL as id,
+            p.user_id as user_id,
+            DATE_FORMAT(o.pay_datetime, '%Y-%m') as month,
+            SUM(o.per_amount) as total_spending,
+            COUNT(*) as transaction_count,
+            NULL as created_at,
+            NULL as updated_at
+        FROM outcome o
+        INNER JOIN outcome_participant p ON o.id = p.outcome_id
+        INNER JOIN pay_style ps ON o.style_id = ps.id
+        WHERE p.user_id = #{userId}
+            AND o.deleted_flag = 0
+            AND o.repay_flag = 1
+            AND ps.is_fixed = TRUE
+        GROUP BY p.user_id, DATE_FORMAT(o.pay_datetime, '%Y-%m')
+        ORDER BY month ASC
+    </select>
+
+    <!-- 聚合变动支出（非固定分类） -->
+    <select id="aggregateVariableSpending" resultMap="UserMonthlySpendingMap">
+        SELECT
+            NULL as id,
+            p.user_id as user_id,
+            DATE_FORMAT(o.pay_datetime, '%Y-%m') as month,
+            SUM(o.per_amount) as total_spending,
+            COUNT(*) as transaction_count,
+            NULL as created_at,
+            NULL as updated_at
+        FROM outcome o
+        INNER JOIN outcome_participant p ON o.id = p.outcome_id
+        LEFT JOIN pay_style ps ON o.style_id = ps.id
+        WHERE p.user_id = #{userId}
+            AND o.deleted_flag = 0
+            AND o.repay_flag = 1
+            AND (ps.is_fixed IS NULL OR ps.is_fixed = FALSE)
+        GROUP BY p.user_id, DATE_FORMAT(o.pay_datetime, '%Y-%m')
+        ORDER BY month ASC
+    </select>
+
+</mapper>

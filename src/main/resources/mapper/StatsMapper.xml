@@ -91,4 +91,20 @@
         ORDER BY date
     </select>
 
+    <!-- 月度应付统计（别人替我付的消费） -->
+    <select id="getMonthlyOwedStats" resultType="map">
+        SELECT
+            DATE_FORMAT(o.pay_datetime, '%Y-%m') as month,
+            SUM(o.per_amount * COALESCE(p.shares, 1)) as totalAmount
+        FROM outcome o
+        INNER JOIN outcome_participant p ON o.id = p.outcome_id
+        WHERE p.user_id = #{userId}
+            AND o.payer_userid != #{userId}
+            AND o.deleted_flag = 0
+            AND o.repay_flag = 1
+            AND o.pay_datetime >= DATE_SUB(CURDATE(), INTERVAL #{months} MONTH)
+        GROUP BY DATE_FORMAT(o.pay_datetime, '%Y-%m')
+        ORDER BY month
+    </select>
+
 </mapper>

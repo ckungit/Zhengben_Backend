@@ -4,6 +4,8 @@ import cn.dev33.satoken.exception.NotLoginException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
+import org.springframework.data.redis.RedisConnectionFailureException;
+import org.springframework.data.redis.RedisSystemException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -61,6 +63,19 @@ public class GlobalExceptionHandler {
 
         result.put("message", message.isEmpty() ? "参数校验失败" : message);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(result);
+    }
+
+    /**
+     * 处理 Redis 连接异常 - 返回 503 服务暂时不可用
+     * 作为安全网，防止未被 SaTokenDaoTwoLevel catch 的 Redis 异常泄漏
+     */
+    @ExceptionHandler({RedisConnectionFailureException.class, RedisSystemException.class})
+    public ResponseEntity<Map<String, Object>> handleRedisException(Exception e) {
+        Map<String, Object> result = new HashMap<>();
+        result.put("code", 503);
+        result.put("message", "服务暂时不可用，请稍后重试");
+        logger.error("Redis 异常: {}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(result);
     }
 
     /**

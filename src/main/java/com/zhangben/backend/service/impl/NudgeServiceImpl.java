@@ -60,8 +60,8 @@ public class NudgeServiceImpl implements NudgeService {
 
     @Override
     @Transactional
-    public NudgeResult sendNudge(Integer creditorId, Integer debtorId) {
-        logger.info("催促还账: creditor={}, debtor={}", creditorId, debtorId);
+    public NudgeResult sendNudge(Integer creditorId, Integer debtorId, boolean anonymous) {
+        logger.info("催促还账: creditor={}, debtor={}, anonymous={}", creditorId, debtorId, anonymous);
 
         // 1. 检查频率限制
         if (!canNudge(creditorId, debtorId)) {
@@ -92,13 +92,15 @@ public class NudgeServiceImpl implements NudgeService {
         nudgeMapper.insert(nudge);
 
         // 5. 创建系统通知
-        createNudgeNotification(creditor, debtor);
+        createNudgeNotification(creditor, debtor, anonymous);
 
         // 6. 发送邮件（异步，不阻塞）
-        sendNudgeEmailAsync(creditor, debtor);
+        sendNudgeEmailAsync(creditor, debtor, anonymous);
 
-        logger.info("催促成功: creditor={}, debtor={}", creditorId, debtorId);
-        return NudgeResult.success();
+        logger.info("催促成功: creditor={}, debtor={}, anonymous={}", creditorId, debtorId, anonymous);
+        NudgeResult result = NudgeResult.success();
+        result.setAnonymous(anonymous);
+        return result;
     }
 
     @Override
@@ -126,15 +128,22 @@ public class NudgeServiceImpl implements NudgeService {
     /**
      * 创建系统通知
      */
-    private void createNudgeNotification(User creditor, User debtor) {
+    private void createNudgeNotification(User creditor, User debtor, boolean anonymous) {
         Notification notification = new Notification();
         notification.setUserId(debtor.getId());
         notification.setType(NOTIFICATION_TYPE_NUDGE);
 
         // 根据债务人语言设置通知内容
         String lang = debtor.getPreferredLanguage() != null ? debtor.getPreferredLanguage() : "zh-CN";
-        String title = getNudgeTitle(lang, creditor.getNickname());
-        String content = getNudgeContent(lang, creditor.getNickname());
+        String title;
+        String content;
+        if (anonymous) {
+            title = getAnonymousNudgeTitle(lang);
+            content = getAnonymousNudgeContent(lang);
+        } else {
+            title = getNudgeTitle(lang, creditor.getNickname());
+            content = getNudgeContent(lang, creditor.getNickname());
+        }
 
         notification.setTitle(title);
         notification.setContent(content);
@@ -143,13 +152,41 @@ public class NudgeServiceImpl implements NudgeService {
         notification.setCreatedAt(LocalDateTime.now());
 
         notificationMapper.insertSelective(notification);
-        logger.debug("创建催促通知: userId={}, title={}", debtor.getId(), title);
+        logger.debug("创建催促通知: userId={}, title={}, anonymous={}", debtor.getId(), title, anonymous);
+    }
+
+    /**
+     * 获取匿名催促通知标题（多语言）
+     */
+    private String getAnonymousNudgeTitle(String lang) {
+        switch (lang) {
+            case "en-US":
+                return "Someone sent you a payment reminder";
+            case "ja-JP":
+                return "支払いリマインダーが届きました";
+            default: // zh-CN
+                return "有人提醒您结算欠款";
+        }
+    }
+
+    /**
+     * 获取匿名催促通知内容（多语言）
+     */
+    private String getAnonymousNudgeContent(String lang) {
+        switch (lang) {
+            case "en-US":
+                return "Please check your debts and settle when convenient.";
+            case "ja-JP":
+                return "お手すきの際にご確認ください。";
+            default: // zh-CN
+                return "请在方便时查看并结算。";
+        }
     }
 
     /**
      * 异步发送催促邮件
      */
-    private void sendNudgeEmailAsync(User creditor, User debtor) {
+    private void sendNudgeEmailAsync(User creditor, User debtor, boolean anonymous) {
         if (!providerManager.isMailEnabled()) {
             logger.debug("邮件服务未启用，跳过催促邮件");
             return;
@@ -162,9 +199,20 @@ public class NudgeServiceImpl implements NudgeService {
 
         String lang = debtor.getPreferredLanguage() != null ? debtor.getPreferredLanguage() : "zh-CN";
 
+        String creditorName;
+        if (anonymous) {
+            switch (lang) {
+                case "en-US": creditorName = "Someone"; break;
+                case "ja-JP": creditorName = "どなたか"; break;
+                default: creditorName = "有人"; break;
+            }
+        } else {
+            creditorName = creditor.getNickname() != null ? creditor.getNickname() : "您的好友";
+        }
+
         Map<String, Object> variables = new HashMap<>();
         variables.put("debtorName", debtor.getNickname() != null ? debtor.getNickname() : "用户");
-        variables.put("creditorName", creditor.getNickname() != null ? creditor.getNickname() : "您的好友");
+        variables.put("creditorName", creditorName);
         variables.put("loginUrl", baseUrl + "/debts");
         variables.put("year", String.valueOf(Year.now().getValue()));
 
@@ -174,8 +222,8 @@ public class NudgeServiceImpl implements NudgeService {
 
         if (htmlContent == null) {
             // 模板不存在时使用内置模板
-            htmlContent = buildFallbackNudgeEmail(creditor, debtor, lang);
-            subject = getNudgeEmailSubject(lang, creditor.getNickname());
+            htmlContent = buildFallbackNudgeEmail(creditor, debtor, lang, anonymous);
+            subject = getNudgeEmailSubject(lang, creditorName);
         }
 
         // 异步发送
@@ -228,9 +276,18 @@ public class NudgeServiceImpl implements NudgeService {
     /**
      * 构建内置催促邮件模板（当数据库模板不存在时使用）
      */
-    private String buildFallbackNudgeEmail(User creditor, User debtor, String lang) {
+    private String buildFallbackNudgeEmail(User creditor, User debtor, String lang, boolean anonymous) {
         String debtorName = debtor.getNickname() != null ? debtor.getNickname() : "用户";
-        String creditorName = creditor.getNickname() != null ? creditor.getNickname() : "您的好友";
+        String creditorName;
+        if (anonymous) {
+            switch (lang) {
+                case "en-US": creditorName = "Someone"; break;
+                case "ja-JP": creditorName = "どなたか"; break;
+                default: creditorName = "有人"; break;
+            }
+        } else {
+            creditorName = creditor.getNickname() != null ? creditor.getNickname() : "您的好友";
+        }
 
         String greeting, body, cta, footer, privacy;
 
@@ -240,21 +297,21 @@ public class NudgeServiceImpl implements NudgeService {
                 body = creditorName + " has sent you a gentle reminder about a pending payment.";
                 cta = "View Details";
                 footer = "Pay友 - Your AA Bill Splitting Companion";
-                privacy = "No Cookies · No Tracking · Privacy First";
+                privacy = "Essential Cookie Only · No Tracking · Privacy First";
                 break;
             case "ja-JP":
                 greeting = debtorName + "さん、こんにちは";
                 body = creditorName + "さんから支払いのリマインダーが届きました。";
                 cta = "詳細を見る";
                 footer = "Pay友 - あなたの割り勘パートナー";
-                privacy = "Cookie不使用 · 追跡なし · プライバシー優先";
+                privacy = "必要最小限Cookie · 追跡なし · プライバシー優先";
                 break;
             default: // zh-CN
                 greeting = debtorName + "，您好";
                 body = creditorName + " 提醒您有一笔账款待结算。";
                 cta = "查看详情";
                 footer = "Pay友 - 您的 AA 制记账好朋友";
-                privacy = "零 Cookie · 零追踪 · 隐私优先";
+                privacy = "仅必要 Cookie · 零追踪 · 隐私优先";
                 break;
         }
 

@@ -88,6 +88,44 @@ public class OutcomeController {
     }
 
     /**
+     * Seek-based 分页获取历史记录（支持月份/日期筛选）
+     * @param lastId 上一页最后一条记录的ID（首页不传）
+     * @param limit 每页数量，默认20
+     * @param month 月份筛选 yyyy-MM（可选）
+     * @param day 日期筛选 yyyy-MM-dd（可选，优先于month）
+     */
+    @GetMapping("/history")
+    public ResponseEntity<?> getPagedHistory(
+            @RequestParam(required = false) Integer lastId,
+            @RequestParam(defaultValue = "20") Integer limit,
+            @RequestParam(required = false) String month,
+            @RequestParam(required = false) String day) {
+        Integer userId = StpUtil.getLoginIdAsInt();
+        Map<String, Object> result = outcomeService.getPagedHistory(userId, lastId, limit, month, day);
+        return ResponseEntity.ok(result);
+    }
+
+    /**
+     * 获取用户有记录的月份列表
+     */
+    @GetMapping("/months")
+    public ResponseEntity<?> getAvailableMonths() {
+        Integer userId = StpUtil.getLoginIdAsInt();
+        return ResponseEntity.ok(outcomeService.getAvailableMonths(userId));
+    }
+
+    /**
+     * 获取用户某月有记录的日期列表
+     * @param month 月份 yyyy-MM
+     */
+    @GetMapping("/days")
+    public ResponseEntity<?> getActiveDays(@RequestParam String month) {
+        Integer userId = StpUtil.getLoginIdAsInt();
+        List<Integer> days = outcomeService.getActiveDays(userId, month);
+        return ResponseEntity.ok(days);
+    }
+
+    /**
      * 搜索历史账单
      * @param keyword 搜索关键词（搜索备注）
      * @param startDate 开始日期（格式：yyyy-MM-dd）

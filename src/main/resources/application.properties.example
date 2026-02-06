@@ -4,7 +4,7 @@ server.port=8080
 
 # Sa-Token 配置
 sa-token.token-name=satoken
-sa-token.timeout=86400
+sa-token.timeout=2592000
 sa-token.is-concurrent=true
 sa-token.is-share=false
 # Sa-Token 使用 Redis 存储会话 (自动通过 sa-token-redis-jackson 依赖启用)

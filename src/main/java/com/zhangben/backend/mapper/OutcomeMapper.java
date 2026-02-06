@@ -150,4 +150,37 @@ public interface OutcomeMapper {
      * V40: Delete outcomes by payer user ID (GDPR)
      */
     int deleteByPayerUserId(@Param("payerUserId") Integer payerUserId);
+
+    /**
+     * Seek-based 分页查询用户的所有记录（支出 + 收入）
+     * @param userId 用户ID
+     * @param lastId 上一页最后一条记录的ID（首页传 null）
+     * @param monthStart 月份开始时间（可选）
+     * @param monthEnd 月份结束时间（可选）
+     * @param limit 每页数量
+     */
+    List<Outcome> selectPagedByUser(@Param("userId") Integer userId,
+                                     @Param("lastId") Integer lastId,
+                                     @Param("monthStart") java.time.LocalDateTime monthStart,
+                                     @Param("monthEnd") java.time.LocalDateTime monthEnd,
+                                     @Param("limit") Integer limit);
+
+    /**
+     * 统计某月总支出金额（仅 repay_flag=1 的支付记录）
+     */
+    Long sumMonthlyExpense(@Param("userId") Integer userId,
+                           @Param("monthStart") java.time.LocalDateTime monthStart,
+                           @Param("monthEnd") java.time.LocalDateTime monthEnd);
+
+    /**
+     * 获取用户有记录的月份列表（倒序）
+     */
+    List<String> selectDistinctMonths(@Param("userId") Integer userId);
+
+    /**
+     * 获取用户某月有记录的日期列表
+     */
+    List<Integer> selectDistinctDays(@Param("userId") Integer userId,
+                                      @Param("monthStart") java.time.LocalDateTime monthStart,
+                                      @Param("monthEnd") java.time.LocalDateTime monthEnd);
 }

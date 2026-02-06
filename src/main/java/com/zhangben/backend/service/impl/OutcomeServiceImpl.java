@@ -19,9 +19,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
+import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -597,5 +597,80 @@ public class OutcomeServiceImpl implements OutcomeService {
         }
 
         return (int) outcomeMapper.countByExample(example);
+    }
+
+    @Override
+    public Map<String, Object> getPagedHistory(Integer userId, Integer lastId, Integer limit, String month) {
+        return getPagedHistory(userId, lastId, limit, month, null);
+    }
+
+    @Override
+    public Map<String, Object> getPagedHistory(Integer userId, Integer lastId, Integer limit, String month, String day) {
+        // 解析时间范围
+        LocalDateTime rangeStart = null;
+        LocalDateTime rangeEnd = null;
+
+        if (day != null && !day.isEmpty()) {
+            // 按天筛选优先
+            java.time.LocalDate dayDate = java.time.LocalDate.parse(day);
+            rangeStart = dayDate.atStartOfDay();
+            rangeEnd = dayDate.plusDays(1).atStartOfDay();
+        } else if (month != null && !month.isEmpty()) {
+            YearMonth ym = YearMonth.parse(month, DateTimeFormatter.ofPattern("yyyy-MM"));
+            rangeStart = ym.atDay(1).atStartOfDay();
+            rangeEnd = ym.plusMonths(1).atDay(1).atStartOfDay();
+        }
+
+        // 多查一条用于判断 hasMore
+        int queryLimit = limit + 1;
+        List<Outcome> outcomes = outcomeMapper.selectPagedByUser(userId, lastId, rangeStart, rangeEnd, queryLimit);
+
+        boolean hasMore = outcomes.size() > limit;
+        if (hasMore) {
+            outcomes = outcomes.subList(0, limit);
+        }
+
+        // 转换为 DTO
+        List<RecentOutcomeItem> items = new ArrayList<>();
+        for (Outcome o : outcomes) {
+            boolean isIncome = o.getRepayFlag() == (byte) 2 && o.getTargetUserid() != null && o.getTargetUserid().equals(userId);
+            RecentOutcomeItem item = buildRecentOutcomeItem(o, userId, isIncome);
+            items.add(item);
+        }
+
+        // 月度总支出（按月计算，即使在按天筛选时也用月范围）
+        Long monthlyTotal = 0L;
+        if (month != null && !month.isEmpty()) {
+            YearMonth ym = YearMonth.parse(month, DateTimeFormatter.ofPattern("yyyy-MM"));
+            LocalDateTime monthStart = ym.atDay(1).atStartOfDay();
+            LocalDateTime monthEnd = ym.plusMonths(1).atDay(1).atStartOfDay();
+            monthlyTotal = outcomeMapper.sumMonthlyExpense(userId, monthStart, monthEnd);
+        } else if (day != null && !day.isEmpty()) {
+            // 按天筛选时，也计算该月的月度总支出
+            java.time.LocalDate dayDate = java.time.LocalDate.parse(day);
+            YearMonth ym = YearMonth.from(dayDate);
+            LocalDateTime monthStart = ym.atDay(1).atStartOfDay();
+            LocalDateTime monthEnd = ym.plusMonths(1).atDay(1).atStartOfDay();
+            monthlyTotal = outcomeMapper.sumMonthlyExpense(userId, monthStart, monthEnd);
+        }
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("list", items);
+        result.put("hasMore", hasMore);
+        result.put("monthlyTotal", monthlyTotal);
+        return result;
+    }
+
+    @Override
+    public List<String> getAvailableMonths(Integer userId) {
+        return outcomeMapper.selectDistinctMonths(userId);
+    }
+
+    @Override
+    public List<Integer> getActiveDays(Integer userId, String month) {
+        YearMonth ym = YearMonth.parse(month, DateTimeFormatter.ofPattern("yyyy-MM"));
+        LocalDateTime monthStart = ym.atDay(1).atStartOfDay();
+        LocalDateTime monthEnd = ym.plusMonths(1).atDay(1).atStartOfDay();
+        return outcomeMapper.selectDistinctDays(userId, monthStart, monthEnd);
     }
 }

@@ -112,6 +112,25 @@ public class UserController {
     }
 
     /**
+     * 获取用户公开信息（用于扫码加好友确认）
+     */
+    @GetMapping("/public/{id}")
+    public ResponseEntity<?> getUserPublicProfile(@PathVariable Integer id) {
+        StpUtil.checkLogin();
+
+        User user = userMapper.selectByPrimaryKey(id);
+        if (user == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        UserSearchResult result = new UserSearchResult();
+        result.setId(user.getId());
+        result.setNickname(user.getNickname());
+        result.setAvatarUrl(user.getAvatarUrl());
+        return ResponseEntity.ok(result);
+    }
+
+    /**
      * V40: GDPR Compliant Account Deletion
      * Permanently deletes user account and all associated data
      * Implements "Right to be Forgotten"

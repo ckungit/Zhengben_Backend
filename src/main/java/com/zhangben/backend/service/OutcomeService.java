@@ -60,4 +60,29 @@ public interface OutcomeService {
      */
     Integer countSearchOutcomes(Integer userId, String keyword,
             java.time.LocalDate startDate, java.time.LocalDate endDate, Integer styleId);
+
+    /**
+     * Seek-based 分页获取用户历史记录
+     * @param userId 用户ID
+     * @param lastId 上一页最后一条记录的ID（首页传 null）
+     * @param limit 每页数量
+     * @param month 月份筛选 yyyy-MM（可选）
+     * @return 包含 list, hasMore, monthlyTotal 的结果 Map
+     */
+    java.util.Map<String, Object> getPagedHistory(Integer userId, Integer lastId, Integer limit, String month);
+
+    /**
+     * Seek-based 分页获取用户历史记录（支持按天筛选）
+     */
+    java.util.Map<String, Object> getPagedHistory(Integer userId, Integer lastId, Integer limit, String month, String day);
+
+    /**
+     * 获取用户有记录的月份列表
+     */
+    java.util.List<String> getAvailableMonths(Integer userId);
+
+    /**
+     * 获取用户某月有记录的日期列表
+     */
+    java.util.List<Integer> getActiveDays(Integer userId, String month);
 }

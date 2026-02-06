@@ -609,4 +609,74 @@
   <delete id="deleteByPayerUserId">
     DELETE FROM outcome WHERE payer_userid = #{payerUserId}
   </delete>
+
+  <!-- Seek-based 分页查询：UNION 用户的支出记录 + 收入记录 -->
+  <select id="selectPagedByUser" resultMap="BaseResultMap">
+    SELECT <include refid="Base_Column_List" />
+    FROM (
+      (SELECT <include refid="Base_Column_List" />
+       FROM outcome
+       WHERE payer_userid = #{userId}
+         AND deleted_flag = 0
+         <if test="lastId != null">
+           AND id &lt; #{lastId}
+         </if>
+         <if test="monthStart != null">
+           AND pay_datetime &gt;= #{monthStart}
+         </if>
+         <if test="monthEnd != null">
+           AND pay_datetime &lt; #{monthEnd}
+         </if>
+      )
+      UNION ALL
+      (SELECT <include refid="Base_Column_List" />
+       FROM outcome
+       WHERE target_userid = #{userId}
+         AND repay_flag = 2
+         AND deleted_flag = 0
+         <if test="lastId != null">
+           AND id &lt; #{lastId}
+         </if>
+         <if test="monthStart != null">
+           AND pay_datetime &gt;= #{monthStart}
+         </if>
+         <if test="monthEnd != null">
+           AND pay_datetime &lt; #{monthEnd}
+         </if>
+      )
+    ) combined
+    ORDER BY id DESC
+    LIMIT #{limit}
+  </select>
+
+  <!-- 统计某月总支出（仅支付记录） -->
+  <select id="sumMonthlyExpense" resultType="java.lang.Long">
+    SELECT COALESCE(SUM(amount), 0)
+    FROM outcome
+    WHERE payer_userid = #{userId}
+      AND deleted_flag = 0
+      AND repay_flag = 1
+      AND pay_datetime &gt;= #{monthStart}
+      AND pay_datetime &lt; #{monthEnd}
+  </select>
+
+  <!-- 获取用户有记录的月份列表（倒序） -->
+  <select id="selectDistinctMonths" resultType="java.lang.String">
+    SELECT DISTINCT DATE_FORMAT(pay_datetime, '%Y-%m') AS month
+    FROM outcome
+    WHERE deleted_flag = 0
+      AND (payer_userid = #{userId} OR (target_userid = #{userId} AND repay_flag = 2))
+    ORDER BY month DESC
+  </select>
+
+  <!-- 获取用户某月有记录的日期列表 -->
+  <select id="selectDistinctDays" resultType="java.lang.Integer">
+    SELECT DISTINCT DAY(pay_datetime) AS day_num
+    FROM outcome
+    WHERE deleted_flag = 0
+      AND (payer_userid = #{userId} OR (target_userid = #{userId} AND repay_flag = 2))
+      AND pay_datetime &gt;= #{monthStart}
+      AND pay_datetime &lt; #{monthEnd}
+    ORDER BY day_num ASC
+  </select>
 </mapper>

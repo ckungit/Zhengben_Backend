@@ -18,4 +18,6 @@ public interface StatsMapper {
     Map<String, Object> getOverviewStats(@Param("userId") Integer userId, @Param("months") Integer months);
     
     List<Map<String, Object>> getDailyAvgStats(@Param("userId") Integer userId, @Param("days") Integer days);
+
+    List<Map<String, Object>> getMonthlyOwedStats(@Param("userId") Integer userId, @Param("months") Integer months);
 }
