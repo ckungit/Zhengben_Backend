@@ -4,6 +4,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -59,6 +60,12 @@ public class OutcomeCreateRequest {
 
     // 关联的活动ID（可选）
     private Integer activityId;
+
+    // V47: Multi-currency fields
+    private String originalCurrency;          // 原始交易币种 (e.g., "THB")
+    private BigDecimal exchangeRateSnapshot;  // 汇率快照 (原始→结算)
+    private Long convertedAmountSnapshot;     // 换算后金额 (结算币种, cents)
+    private String targetCurrencySnapshot;    // 结算币种 (e.g., "JPY")
 
     public Long getAmount() {
         return amount;
@@ -170,5 +177,39 @@ public class OutcomeCreateRequest {
 
     public void setActivityId(Integer activityId) {
         this.activityId = activityId;
+    }
+
+    // V47: Multi-currency getters/setters
+
+    public String getOriginalCurrency() {
+        return originalCurrency;
+    }
+
+    public void setOriginalCurrency(String originalCurrency) {
+        this.originalCurrency = originalCurrency;
+    }
+
+    public BigDecimal getExchangeRateSnapshot() {
+        return exchangeRateSnapshot;
+    }
+
+    public void setExchangeRateSnapshot(BigDecimal exchangeRateSnapshot) {
+        this.exchangeRateSnapshot = exchangeRateSnapshot;
+    }
+
+    public Long getConvertedAmountSnapshot() {
+        return convertedAmountSnapshot;
+    }
+
+    public void setConvertedAmountSnapshot(Long convertedAmountSnapshot) {
+        this.convertedAmountSnapshot = convertedAmountSnapshot;
+    }
+
+    public String getTargetCurrencySnapshot() {
+        return targetCurrencySnapshot;
+    }
+
+    public void setTargetCurrencySnapshot(String targetCurrencySnapshot) {
+        this.targetCurrencySnapshot = targetCurrencySnapshot;
     }
 }

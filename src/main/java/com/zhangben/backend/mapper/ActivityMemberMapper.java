@@ -25,6 +25,12 @@ public interface ActivityMemberMapper {
     int countByActivityId(@Param("activityId") Integer activityId);
 
     /**
+     * V51: Count outcomes related to a user in an activity
+     * (as payer or as participant)
+     */
+    int countUserOutcomes(@Param("activityId") Integer activityId, @Param("userId") Integer userId);
+
+    /**
      * V40: Delete all memberships for a user (GDPR)
      */
     int deleteByUserId(@Param("userId") Integer userId);

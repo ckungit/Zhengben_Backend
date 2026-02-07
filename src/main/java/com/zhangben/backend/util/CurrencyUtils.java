@@ -57,7 +57,7 @@ public class CurrencyUtils {
         }
         // 支持的货币列表
         return switch (currency.toUpperCase()) {
-            case "JPY", "USD", "CNY", "EUR", "GBP", "KRW", "TWD", "HKD", "SGD", "AUD", "CAD" -> true;
+            case "JPY", "USD", "CNY", "EUR", "GBP", "KRW", "TWD", "HKD", "SGD", "AUD", "CAD", "THB" -> true;
             default -> false;
         };
     }
@@ -75,6 +75,7 @@ public class CurrencyUtils {
             case "EUR" -> "€";
             case "GBP" -> "£";
             case "KRW" -> "₩";
+            case "THB" -> "฿";
             default -> "¥";
         };
     }

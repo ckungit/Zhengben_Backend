@@ -37,6 +37,11 @@ public class RecentOutcomeItem {
     private Integer payerId;
     private String payerName;
 
+    // V47: Multi-currency fields
+    private Long originalAmount;        // 原始币种金额 (cents)
+    private String originalCurrency;    // 原始交易币种
+    private String currency;            // 结算币种
+
     // Getters and Setters
     public Integer getId() {
         return id;
@@ -180,5 +185,29 @@ public class RecentOutcomeItem {
 
     public void setPayerName(String payerName) {
         this.payerName = payerName;
+    }
+
+    public Long getOriginalAmount() {
+        return originalAmount;
+    }
+
+    public void setOriginalAmount(Long originalAmount) {
+        this.originalAmount = originalAmount;
+    }
+
+    public String getOriginalCurrency() {
+        return originalCurrency;
+    }
+
+    public void setOriginalCurrency(String originalCurrency) {
+        this.originalCurrency = originalCurrency;
+    }
+
+    public String getCurrency() {
+        return currency;
+    }
+
+    public void setCurrency(String currency) {
+        this.currency = currency;
     }
 }

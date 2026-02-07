@@ -10,6 +10,7 @@ public class CurrentUserResponse {
     private Byte paypayFlag;
     private Byte bankFlag;
     private String primaryCurrency;
+    private String avatarUrl;
 
     // 无参构造函数
     public CurrentUserResponse() {
@@ -33,6 +34,7 @@ public class CurrentUserResponse {
     public Byte getPaypayFlag() { return paypayFlag; }
     public Byte getBankFlag() { return bankFlag; }
     public String getPrimaryCurrency() { return primaryCurrency; }
+    public String getAvatarUrl() { return avatarUrl; }
 
     // Setters
     public void setId(Integer id) { this.id = id; }
@@ -44,4 +46,5 @@ public class CurrentUserResponse {
     public void setPaypayFlag(Byte paypayFlag) { this.paypayFlag = paypayFlag; }
     public void setBankFlag(Byte bankFlag) { this.bankFlag = bankFlag; }
     public void setPrimaryCurrency(String primaryCurrency) { this.primaryCurrency = primaryCurrency; }
+    public void setAvatarUrl(String avatarUrl) { this.avatarUrl = avatarUrl; }
 }

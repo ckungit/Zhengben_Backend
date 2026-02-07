@@ -13,11 +13,15 @@ import com.zhangben.backend.service.EmailService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.zhangben.backend.model.*;
+import com.zhangben.backend.mapper.ExchangeRateMapper;
+import com.zhangben.backend.service.CurrencyConverterService;
 import com.zhangben.backend.service.OutcomeService;
+import com.zhangben.backend.util.CurrencyUtils;
 import com.zhangben.backend.util.GeoUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
@@ -49,6 +53,12 @@ public class OutcomeServiceImpl implements OutcomeService {
 
     @Autowired
     private NotificationMapper notificationMapper;
+
+    @Autowired
+    private CurrencyConverterService currencyConverterService;
+
+    @Autowired
+    private ExchangeRateMapper exchangeRateMapper;
 
     @Override
     public void createOutcome(OutcomeCreateRequest req) {
@@ -120,6 +130,58 @@ public class OutcomeServiceImpl implements OutcomeService {
         if (req.getLatitude() != null && req.getLongitude() != null) {
             byte[] pointBytes = GeoUtils.toPoint(req.getLongitude(), req.getLatitude());
             outcome.setLocaton(pointBytes);
+        }
+
+        // V47: Multi-currency snapshot
+        String payerCurrency = CurrencyUtils.getCurrentUserCurrency();
+        String originalCurrency = req.getOriginalCurrency() != null ? req.getOriginalCurrency() : payerCurrency;
+        String targetCurrency = req.getTargetCurrencySnapshot() != null ? req.getTargetCurrencySnapshot() : payerCurrency;
+
+        outcome.setOriginalAmount(req.getAmount());
+        outcome.setOriginalCurrency(originalCurrency);
+        outcome.setTargetCurrencySnapshot(targetCurrency);
+
+        if (originalCurrency.equalsIgnoreCase(targetCurrency)) {
+            // Same currency: no conversion needed
+            outcome.setExchangeRateSnapshot(BigDecimal.ONE);
+            outcome.setConvertedAmountSnapshot(req.getAmount());
+        } else if (req.getConvertedAmountSnapshot() != null && req.getExchangeRateSnapshot() != null) {
+            // Frontend provided explicit conversion (user may have manually adjusted)
+            outcome.setExchangeRateSnapshot(req.getExchangeRateSnapshot());
+            outcome.setConvertedAmountSnapshot(req.getConvertedAmountSnapshot());
+            // Update amount and perAmount to use converted values for debt calculation
+            outcome.setAmount(req.getConvertedAmountSnapshot());
+            perAmount = (long) Math.ceil((double) req.getConvertedAmountSnapshot() / totalShares);
+            outcome.setPerAmount(perAmount);
+        } else {
+            // Auto-convert using today's rate
+            BigDecimal rate = currencyConverterService.getRate(originalCurrency, targetCurrency);
+            if (rate != null) {
+                long converted = currencyConverterService.convert(BigDecimal.valueOf(req.getAmount()), originalCurrency, targetCurrency)
+                    .setScale(0, java.math.RoundingMode.HALF_UP).longValue();
+                outcome.setExchangeRateSnapshot(rate);
+                outcome.setConvertedAmountSnapshot(converted);
+                outcome.setAmount(converted);
+                perAmount = (long) Math.ceil((double) converted / totalShares);
+                outcome.setPerAmount(perAmount);
+            } else {
+                // No rate available, treat as same currency
+                outcome.setExchangeRateSnapshot(BigDecimal.ONE);
+                outcome.setConvertedAmountSnapshot(req.getAmount());
+            }
+        }
+
+        // V50: Calculate USD amount snapshot
+        try {
+            String settleCurrency = outcome.getTargetCurrencySnapshot() != null
+                ? outcome.getTargetCurrencySnapshot() : payerCurrency;
+            ExchangeRate rate = exchangeRateMapper.selectByCode(settleCurrency);
+            if (rate != null && rate.getRateToUsd() != null && rate.getRateToUsd().doubleValue() > 0) {
+                long usdSnapshot = Math.round(outcome.getPerAmount() / rate.getRateToUsd().doubleValue());
+                outcome.setUsdAmountSnapshot(usdSnapshot);
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to calculate USD amount snapshot: {}", e.getMessage());
         }
 
         outcomeMapper.insertSelective(outcome);
@@ -327,7 +389,75 @@ public class OutcomeServiceImpl implements OutcomeService {
             item.setParticipantIds(ids);
         }
 
+        // V47: 设置多币种信息
+        item.setOriginalAmount(o.getOriginalAmount());
+        item.setOriginalCurrency(o.getOriginalCurrency());
+        item.setCurrency(o.getTargetCurrencySnapshot());
+
         // 设置活动信息
+        if (o.getActivityId() != null && o.getActivityId() > 0) {
+            item.setActivityId(o.getActivityId());
+            Activity activity = activityMapper.selectById(o.getActivityId());
+            if (activity != null) {
+                item.setActivityName(activity.getName());
+            }
+        }
+
+        return item;
+    }
+
+    /**
+     * 构建 AA 分摊记录项（别人创建的 AA 账单，当前用户是参与者）
+     */
+    private RecentOutcomeItem buildSharedOutcomeItem(Outcome o, Integer userId) {
+        RecentOutcomeItem item = new RecentOutcomeItem();
+        item.setId(o.getId());
+        item.setAmount(o.getAmount());
+        item.setPerAmount(o.getPerAmount());
+        item.setComment(o.getComment());
+        item.setRepayFlag(o.getRepayFlag());
+        item.setPayDatetime(o.getPayDatetime());
+        item.setCreatorId(o.getCreatorId() != null ? o.getCreatorId() : o.getPayerUserid());
+        item.setRecordType("shared");
+
+        // 设置付款人信息
+        item.setPayerId(o.getPayerUserid());
+        User payer = userMapper.selectByPrimaryKey(o.getPayerUserid());
+        if (payer != null) {
+            item.setPayerName(payer.getNickname());
+        }
+
+        // 获取分类
+        if (o.getStyleId() != null && o.getStyleId() > 0) {
+            PayStyle style = payStyleMapper.selectByPrimaryKey(o.getStyleId());
+            item.setStyleName(style != null ? style.getStyleName() : "未分类");
+        } else {
+            item.setStyleName("未分类");
+        }
+
+        // 获取参与者
+        OutcomeParticipantExample pExample = new OutcomeParticipantExample();
+        pExample.createCriteria().andOutcomeIdEqualTo(o.getId());
+        List<OutcomeParticipant> participants = outcomeParticipantMapper.selectByExample(pExample);
+
+        List<String> names = new ArrayList<>();
+        List<Integer> ids = new ArrayList<>();
+        for (OutcomeParticipant p : participants) {
+            User u = userMapper.selectByPrimaryKey(p.getUserId());
+            if (u != null) {
+                names.add(u.getNickname());
+                ids.add(u.getId());
+            }
+        }
+        item.setParticipantNames(names);
+        item.setParticipantIds(ids);
+
+        // V47: 多币种信息
+        item.setOriginalAmount(o.getOriginalAmount());
+        item.setOriginalCurrency(o.getOriginalCurrency());
+        item.setCurrency(o.getTargetCurrencySnapshot());
+
+        // 活动信息
         if (o.getActivityId() != null && o.getActivityId() > 0) {
             item.setActivityId(o.getActivityId());
             Activity activity = activityMapper.selectById(o.getActivityId());
@@ -419,6 +549,11 @@ public class OutcomeServiceImpl implements OutcomeService {
                 item.setActivityName(activity.getName());
             }
         }
+
+        // V47: 多币种信息
+        item.setOriginalAmount(outcome.getOriginalAmount());
+        item.setOriginalCurrency(outcome.getOriginalCurrency());
+        item.setCurrency(outcome.getTargetCurrencySnapshot());
 
         return item;
     }
@@ -566,6 +701,11 @@ public class OutcomeServiceImpl implements OutcomeService {
                 }
             }
 
+            // V47: 多币种信息
+            item.setOriginalAmount(o.getOriginalAmount());
+            item.setOriginalCurrency(o.getOriginalCurrency());
+            item.setCurrency(o.getTargetCurrencySnapshot());
+
             result.add(item);
         }
 
@@ -634,8 +774,14 @@ public class OutcomeServiceImpl implements OutcomeService {
         List<RecentOutcomeItem> items = new ArrayList<>();
         for (Outcome o : outcomes) {
             boolean isIncome = o.getRepayFlag() == (byte) 2 && o.getTargetUserid() != null && o.getTargetUserid().equals(userId);
-            RecentOutcomeItem item = buildRecentOutcomeItem(o, userId, isIncome);
-            items.add(item);
+            boolean isShared = !isIncome && o.getRepayFlag() == (byte) 1 && o.getPayerUserid() != null && !o.getPayerUserid().equals(userId);
+            if (isShared) {
+                RecentOutcomeItem item = buildSharedOutcomeItem(o, userId);
+                items.add(item);
+            } else {
+                RecentOutcomeItem item = buildRecentOutcomeItem(o, userId, isIncome);
+                items.add(item);
+            }
         }
 
         // 月度总支出（按月计算，即使在按天筛选时也用月范围）

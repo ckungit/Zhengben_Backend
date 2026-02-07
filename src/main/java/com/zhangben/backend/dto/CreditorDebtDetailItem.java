@@ -13,6 +13,9 @@ public class CreditorDebtDetailItem {
     private Boolean isRepayment; // 是否是还款记录
     private Integer confirmStatus; // 确认状态: 0=待确认, 1=已确认, null=非还款记录
     private Boolean isOffset; // 是否是抵消记录
+    private String currency; // V47: 金额所在币种
+    private Long originalAmount; // V47: 原始币种金额 (cents)
+    private String originalCurrency; // V47: 原始交易币种
 
     public Integer getOutcomeId() {
         return outcomeId;
@@ -84,5 +87,29 @@ public class CreditorDebtDetailItem {
 
     public void setIsOffset(Boolean isOffset) {
         this.isOffset = isOffset;
+    }
+
+    public String getCurrency() {
+        return currency;
+    }
+
+    public void setCurrency(String currency) {
+        this.currency = currency;
+    }
+
+    public Long getOriginalAmount() {
+        return originalAmount;
+    }
+
+    public void setOriginalAmount(Long originalAmount) {
+        this.originalAmount = originalAmount;
+    }
+
+    public String getOriginalCurrency() {
+        return originalCurrency;
+    }
+
+    public void setOriginalCurrency(String originalCurrency) {
+        this.originalCurrency = originalCurrency;
     }
 }

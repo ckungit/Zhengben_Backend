@@ -250,6 +250,41 @@ public class PredictionEngine {
         return new PredictionResult(predCents, low, high);
     }
 
+    /**
+     * Rescale an existing Kalman filter state when the user changes their primary currency.
+     * Given ratio R = rate_to_usd(new) / rate_to_usd(old):
+     * - State vector (level, trend): multiply by R
+     * - Covariance matrix: multiply by R²
+     * - Predicted values: multiply by R
+     */
+    public void rescaleModel(KalmanFilterState state, double ratio) {
+        // 1. Rescale state vector: x *= R
+        double[] x = deserializeVector(state.getStateVector());
+        x[0] *= ratio;  // level
+        x[1] *= ratio;  // trend
+        state.setStateVector(serializeVector(x));
+
+        // 2. Rescale covariance: P *= R²
+        double[][] P = deserializeMatrix(state.getCovarianceMatrix());
+        double r2 = ratio * ratio;
+        P[0][0] *= r2;
+        P[0][1] *= r2;
+        P[1][0] *= r2;
+        P[1][1] *= r2;
+        state.setCovarianceMatrix(serializeMatrix(P));
+
+        // 3. Rescale predictions
+        if (state.getPredictedNextMonth() != null) {
+            state.setPredictedNextMonth(Math.round(state.getPredictedNextMonth() * ratio));
+        }
+        if (state.getPredictedConfidenceLow() != null) {
+            state.setPredictedConfidenceLow(Math.round(state.getPredictedConfidenceLow() * ratio));
+        }
+        if (state.getPredictedConfidenceHigh() != null) {
+            state.setPredictedConfidenceHigh(Math.round(state.getPredictedConfidenceHigh() * ratio));
+        }
+    }
+
     // --- Serialization helpers ---
 
     private String serializeVector(double[] vec) {

@@ -170,6 +170,7 @@ public class AuthController {
         resp.setPaypayFlag(user.getPaypayFlag());
         resp.setBankFlag(user.getBankFlag());
         resp.setPrimaryCurrency(user.getPrimaryCurrency() != null ? user.getPrimaryCurrency() : "JPY");
+        resp.setAvatarUrl(user.getAvatarUrl());
 
         return ResponseEntity.ok(resp);
     }

@@ -7,6 +7,8 @@
         <result column="name" property="name"/>
         <result column="description" property="description"/>
         <result column="cover_emoji" property="coverEmoji"/>
+        <result column="base_currency" property="baseCurrency"/>
+        <result column="invite_policy" property="invitePolicy"/>
         <result column="creator_id" property="creatorId"/>
         <result column="status" property="status"/>
         <result column="settle_time" property="settleTime"/>
@@ -15,8 +17,8 @@
     </resultMap>
 
     <insert id="insert" parameterType="com.zhangben.backend.model.Activity" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO activity (name, description, cover_emoji, creator_id, status)
-        VALUES (#{name}, #{description}, #{coverEmoji}, #{creatorId}, #{status})
+        INSERT INTO activity (name, description, cover_emoji, base_currency, invite_policy, creator_id, status)
+        VALUES (#{name}, #{description}, #{coverEmoji}, #{baseCurrency}, #{invitePolicy}, #{creatorId}, #{status})
     </insert>
 
     <select id="selectById" resultMap="BaseResultMap">
@@ -35,6 +37,7 @@
             name = #{name},
             description = #{description},
             cover_emoji = #{coverEmoji},
+            invite_policy = #{invitePolicy},
             status = #{status},
             settle_time = #{settleTime}
         WHERE id = #{id}

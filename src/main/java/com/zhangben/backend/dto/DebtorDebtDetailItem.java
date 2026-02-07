@@ -11,6 +11,9 @@ public class DebtorDebtDetailItem {
     private LocalDateTime payDatetime;
     private String locationText;
     private Boolean isOffset; // 是否是抵消记录
+    private String currency; // V47: 金额所在币种
+    private Long originalAmount; // V47: 原始币种金额 (cents)
+    private String originalCurrency; // V47: 原始交易币种
 
     public Integer getOutcomeId() {
         return outcomeId;
@@ -66,5 +69,29 @@ public class DebtorDebtDetailItem {
 
     public void setIsOffset(Boolean isOffset) {
         this.isOffset = isOffset;
+    }
+
+    public String getCurrency() {
+        return currency;
+    }
+
+    public void setCurrency(String currency) {
+        this.currency = currency;
+    }
+
+    public Long getOriginalAmount() {
+        return originalAmount;
+    }
+
+    public void setOriginalAmount(Long originalAmount) {
+        this.originalAmount = originalAmount;
+    }
+
+    public String getOriginalCurrency() {
+        return originalCurrency;
+    }
+
+    public void setOriginalCurrency(String originalCurrency) {
+        this.originalCurrency = originalCurrency;
     }
 }

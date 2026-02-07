@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/debt")
@@ -155,6 +156,15 @@ public class DebtController {
     public SettlementResponse getMinimizedSettlements() {
         Integer userId = StpUtil.getLoginIdAsInt();
         return debtService.getMinimizedSettlements(userId);
+    }
+
+    /**
+     * V49: 获取活动欠款概览（与一般欠款物理隔离）
+     */
+    @GetMapping("/activity-debts")
+    public List<Map<String, Object>> getActivityDebts() {
+        Integer userId = StpUtil.getLoginIdAsInt();
+        return debtService.getActivityDebtsOverview(userId);
     }
 
     /**

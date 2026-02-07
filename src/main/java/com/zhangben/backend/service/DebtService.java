@@ -3,6 +3,7 @@ package com.zhangben.backend.service;
 import com.zhangben.backend.dto.*;
 
 import java.util.List;
+import java.util.Map;
 
 public interface DebtService {
 
@@ -66,4 +67,10 @@ public interface DebtService {
      * FIFO 销账还款：按时间先后对冲旧账单，返回冲销明细
      */
     RepayFifoResponse repayWithFifo(RepayRequest req, Integer userId);
+
+    /**
+     * V49: 获取用户参与的所有活动的债务概览
+     * 返回按活动分组的债务信息
+     */
+    List<Map<String, Object>> getActivityDebtsOverview(Integer userId);
 }

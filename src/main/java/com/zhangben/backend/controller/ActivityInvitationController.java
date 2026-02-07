@@ -9,6 +9,9 @@ import com.zhangben.backend.mapper.UserMapper;
 import com.zhangben.backend.model.Activity;
 import com.zhangben.backend.model.ActivityInvitation;
 import com.zhangben.backend.model.User;
+import com.zhangben.backend.service.ActivityAuthService;
+import com.zhangben.backend.service.ActivityEventService;
+import com.zhangben.backend.service.ActivityRateService;
 import com.zhangben.backend.service.EmailService;
 import cn.hutool.core.util.StrUtil;
 import jakarta.validation.Valid;
@@ -42,6 +45,15 @@ public class ActivityInvitationController {
     @Autowired
     private EmailService emailService;
 
+    @Autowired
+    private ActivityRateService activityRateService;
+
+    @Autowired
+    private ActivityAuthService activityAuthService;
+
+    @Autowired
+    private ActivityEventService activityEventService;
+
     @Value("${app.base-url:https://www.aabillpay.com}")
     private String baseUrl;
 
@@ -64,10 +76,9 @@ public class ActivityInvitationController {
             return ResponseEntity.badRequest().body("活动不存在");
         }
 
-        // 检查是否是活动成员
-        Map<String, Object> myMember = memberMapper.selectByActivityAndUser(activityId, inviterId);
-        if (myMember == null) {
-            return ResponseEntity.badRequest().body("你不是该活动的成员");
+        // V51: Check invite permission (depends on invite_policy)
+        if (!activityAuthService.canInvite(activityId, inviterId)) {
+            return ResponseEntity.badRequest().body("你没有邀请权限");
         }
 
         // 检查被邀请者是否已是成员
@@ -81,8 +92,8 @@ public class ActivityInvitationController {
         if (existing != null) {
             if (existing.getStatus() == 0) {
                 return ResponseEntity.badRequest().body("已发送过邀请，等待对方处理");
-            } else if (existing.getStatus() == 2) {
-                // 重新发送被拒绝的邀请
+            } else if (existing.getStatus() == 1 || existing.getStatus() == 2 || existing.getStatus() == 3) {
+                // 重新发送：已接受(退出后)/被拒绝/已取消 的邀请
                 invitationMapper.updateStatus(existing.getId(), (byte) 0);
                 return ResponseEntity.ok(Map.of("message", "邀请已重新发送", "id", existing.getId()));
             }
@@ -187,6 +198,16 @@ public class ActivityInvitationController {
             memberMapper.insert(invitation.getActivityId(), userId, "member");
         }
 
+        // V49: Lock rate for new member's primary currency
+        User invitee = userMapper.selectByPrimaryKey(userId);
+        if (invitee != null && invitee.getPrimaryCurrency() != null) {
+            activityRateService.lockRateOnMemberJoin(invitation.getActivityId(), invitee.getPrimaryCurrency());
+        }
+
+        // V51: Log join event
+        activityEventService.logJoin(invitation.getActivityId(), userId,
+                invitee != null ? invitee.getPrimaryCurrency() : null);
+
         return ResponseEntity.ok(Map.of("message", "已加入活动"));
     }
 
@@ -215,5 +236,34 @@ public class ActivityInvitationController {
         invitationMapper.updateStatus(id, (byte) 2);
 
         return ResponseEntity.ok(Map.of("message", "已拒绝邀请"));
+    }
+
+    /**
+     * V51: 取消邀请（邀请人取消已发出的待处理邀请）
+     */
+    @PostMapping("/{id}/cancel")
+    public ResponseEntity<?> cancelInvitation(@PathVariable Integer id) {
+        StpUtil.checkLogin();
+        Integer userId = StpUtil.getLoginIdAsInt();
+
+        ActivityInvitation invitation = invitationMapper.selectById(id);
+        if (invitation == null) {
+            return ResponseEntity.badRequest().body("邀请不存在");
+        }
+
+        if (!invitation.getInviterId().equals(userId)) {
+            return ResponseEntity.badRequest().body("只有邀请人可以取消邀请");
+        }
+
+        if (invitation.getStatus() != 0) {
+            return ResponseEntity.badRequest().body("邀请已处理，无法取消");
+        }
+
+        int updated = invitationMapper.cancelByInviter(id, userId);
+        if (updated == 0) {
+            return ResponseEntity.badRequest().body("取消失败");
+        }
+
+        return ResponseEntity.ok(Map.of("message", "邀请已取消"));
     }
 }

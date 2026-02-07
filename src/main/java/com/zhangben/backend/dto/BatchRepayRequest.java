@@ -29,6 +29,11 @@ public class BatchRepayRequest {
     private LocalDateTime payDatetime;
 
     /**
+     * V49: 活动还款时指定活动ID
+     */
+    private Integer activityId;
+
+    /**
      * 还款明细项
      */
     public static class RepaymentItem {
@@ -91,6 +96,14 @@ public class BatchRepayRequest {
 
     public void setPayDatetime(LocalDateTime payDatetime) {
         this.payDatetime = payDatetime;
+    }
+
+    public Integer getActivityId() {
+        return activityId;
+    }
+
+    public void setActivityId(Integer activityId) {
+        this.activityId = activityId;
     }
 
     /**

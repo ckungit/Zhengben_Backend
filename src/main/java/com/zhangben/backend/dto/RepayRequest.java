@@ -29,6 +29,9 @@ public class RepayRequest {
     // 跳过冲突检测（用户选择"仍然提交"）
     private Boolean skipConflictCheck;
 
+    // V49: 活动还款时指定活动ID
+    private Integer activityId;
+
     public Integer getCreditorId() {
         return creditorId;
     }
@@ -83,5 +86,13 @@ public class RepayRequest {
 
     public void setSkipConflictCheck(Boolean skipConflictCheck) {
         this.skipConflictCheck = skipConflictCheck;
+    }
+
+    public Integer getActivityId() {
+        return activityId;
+    }
+
+    public void setActivityId(Integer activityId) {
+        this.activityId = activityId;
     }
 }

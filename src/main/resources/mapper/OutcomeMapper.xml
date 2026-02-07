@@ -25,6 +25,12 @@
     <result column="activity_id" jdbcType="INTEGER" property="activityId" />
     <result column="repaid_by" jdbcType="INTEGER" property="repaidBy" />
     <result column="on_behalf_of" jdbcType="INTEGER" property="onBehalfOf" />
+    <result column="original_amount" jdbcType="BIGINT" property="originalAmount" />
+    <result column="original_currency" jdbcType="VARCHAR" property="originalCurrency" />
+    <result column="target_currency_snapshot" jdbcType="VARCHAR" property="targetCurrencySnapshot" />
+    <result column="exchange_rate_snapshot" jdbcType="DECIMAL" property="exchangeRateSnapshot" />
+    <result column="converted_amount_snapshot" jdbcType="BIGINT" property="convertedAmountSnapshot" />
+    <result column="usd_amount_snapshot" jdbcType="BIGINT" property="usdAmountSnapshot" />
   </resultMap>
   <resultMap extends="BaseResultMap" id="ResultMapWithBLOBs" type="com.zhangben.backend.model.Outcome">
     <!--
@@ -110,7 +116,9 @@
     -->
     id, amount, payer_userid, creator_id, target_userid, per_amount, extra_participants, repay_flag,
     pay_datetime, style_id, comment, deleted_flag, created_at, updated_at, total_shares, activity_id,
-    repaid_by, on_behalf_of
+    repaid_by, on_behalf_of,
+    original_amount, original_currency, target_currency_snapshot, exchange_rate_snapshot, converted_amount_snapshot,
+    usd_amount_snapshot
   </sql>
   <sql id="Blob_Column_List">
     <!--
@@ -275,6 +283,24 @@
       <if test="onBehalfOf != null">
         on_behalf_of,
       </if>
+      <if test="originalAmount != null">
+        original_amount,
+      </if>
+      <if test="originalCurrency != null">
+        original_currency,
+      </if>
+      <if test="targetCurrencySnapshot != null">
+        target_currency_snapshot,
+      </if>
+      <if test="exchangeRateSnapshot != null">
+        exchange_rate_snapshot,
+      </if>
+      <if test="convertedAmountSnapshot != null">
+        converted_amount_snapshot,
+      </if>
+      <if test="usdAmountSnapshot != null">
+        usd_amount_snapshot,
+      </if>
     </trim>
     <trim prefix="values (" suffix=")" suffixOverrides=",">
       <if test="id != null">
@@ -333,6 +359,24 @@
       </if>
       <if test="onBehalfOf != null">
         #{onBehalfOf,jdbcType=INTEGER},
+      </if>
+      <if test="originalAmount != null">
+        #{originalAmount,jdbcType=BIGINT},
+      </if>
+      <if test="originalCurrency != null">
+        #{originalCurrency,jdbcType=VARCHAR},
+      </if>
+      <if test="targetCurrencySnapshot != null">
+        #{targetCurrencySnapshot,jdbcType=VARCHAR},
+      </if>
+      <if test="exchangeRateSnapshot != null">
+        #{exchangeRateSnapshot,jdbcType=DECIMAL},
+      </if>
+      <if test="convertedAmountSnapshot != null">
+        #{convertedAmountSnapshot,jdbcType=BIGINT},
+      </if>
+      <if test="usdAmountSnapshot != null">
+        #{usdAmountSnapshot,jdbcType=BIGINT},
       </if>
     </trim>
   </insert>
@@ -560,19 +604,30 @@
     where id = #{id,jdbcType=INTEGER}
   </update>
 
-  <!-- 根据活动ID查询账单列表（本地化） -->
+  <!-- 根据活动ID查询账单列表（本地化）V49: 增加货币+参与者字段 -->
   <select id="selectByActivityId" resultType="map">
     SELECT
       o.id,
       o.amount,
       o.per_amount as perAmount,
+      o.original_amount as originalAmount,
+      o.original_currency as originalCurrency,
+      o.target_currency_snapshot as targetCurrencySnapshot,
+      o.exchange_rate_snapshot as exchangeRateSnapshot,
+      o.converted_amount_snapshot as convertedAmountSnapshot,
+      o.total_shares as totalShares,
       o.comment,
       o.pay_datetime as payDatetime,
       o.style_id as styleId,
       o.payer_userid as payerUserId,
       o.creator_id as creatorId,
       u.nickname as payerName,
-      COALESCE(psi.display_name, ps.style_name) as styleName
+      COALESCE(psi.display_name, ps.style_name) as styleName,
+      (SELECT GROUP_CONCAT(u2.nickname ORDER BY u2.id SEPARATOR ', ')
+       FROM outcome_participant op
+       JOIN user u2 ON op.user_id = u2.id
+       WHERE op.outcome_id = o.id) as participantNames,
+      (SELECT COUNT(*) FROM outcome_participant op WHERE op.outcome_id = o.id) as participantCount
     FROM outcome o
     LEFT JOIN user u ON o.payer_userid = u.id
     LEFT JOIN pay_style ps ON o.style_id = ps.id
@@ -610,7 +665,7 @@
     DELETE FROM outcome WHERE payer_userid = #{payerUserId}
   </delete>
 
-  <!-- Seek-based 分页查询：UNION 用户的支出记录 + 收入记录 -->
+  <!-- Seek-based 分页查询：UNION 用户的支出记录 + 收入记录 + AA分摊记录 -->
   <select id="selectPagedByUser" resultMap="BaseResultMap">
     SELECT <include refid="Base_Column_List" />
     FROM (
@@ -642,6 +697,29 @@
          </if>
          <if test="monthEnd != null">
            AND pay_datetime &lt; #{monthEnd}
+         </if>
+      )
+      UNION ALL
+      (SELECT o.id, o.amount, o.payer_userid, o.creator_id, o.target_userid, o.per_amount,
+              o.extra_participants, o.repay_flag, o.pay_datetime, o.style_id, o.comment,
+              o.deleted_flag, o.created_at, o.updated_at, o.total_shares, o.activity_id,
+              o.repaid_by, o.on_behalf_of,
+              o.original_amount, o.original_currency, o.target_currency_snapshot,
+              o.exchange_rate_snapshot, o.converted_amount_snapshot, o.usd_amount_snapshot
+       FROM outcome o
+       INNER JOIN outcome_participant op ON o.id = op.outcome_id
+       WHERE op.user_id = #{userId}
+         AND o.payer_userid != #{userId}
+         AND o.repay_flag = 1
+         AND o.deleted_flag = 0
+         <if test="lastId != null">
+           AND o.id &lt; #{lastId}
+         </if>
+         <if test="monthStart != null">
+           AND o.pay_datetime &gt;= #{monthStart}
+         </if>
+         <if test="monthEnd != null">
+           AND o.pay_datetime &lt; #{monthEnd}
          </if>
       )
     ) combined

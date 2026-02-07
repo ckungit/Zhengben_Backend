@@ -44,6 +44,7 @@
     <select id="selectByActivity" resultType="map">
         SELECT
             i.id,
+            i.inviter_id as inviterId,
             i.invitee_id as inviteeId,
             i.status,
             i.created_at as createdAt,
@@ -70,6 +71,13 @@
 
     <update id="markEmailSent">
         UPDATE activity_invitation SET email_sent = 1 WHERE id = #{id}
+    </update>
+
+    <!-- V51: Cancel pending invitation by inviter -->
+    <update id="cancelByInviter">
+        UPDATE activity_invitation
+        SET status = 3, updated_at = NOW()
+        WHERE id = #{id} AND inviter_id = #{inviterId} AND status = 0
     </update>
 
     <delete id="deleteByActivity">

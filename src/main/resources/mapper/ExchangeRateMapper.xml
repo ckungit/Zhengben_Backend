@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhangben.backend.mapper.ExchangeRateMapper">
+
+  <resultMap id="BaseResultMap" type="com.zhangben.backend.model.ExchangeRate">
+    <id column="code" jdbcType="VARCHAR" property="code" />
+    <result column="rate_to_usd" jdbcType="DECIMAL" property="rateToUsd" />
+    <result column="updated_at" jdbcType="TIMESTAMP" property="updatedAt" />
+  </resultMap>
+
+  <select id="selectByCode" resultMap="BaseResultMap">
+    SELECT code, rate_to_usd, updated_at
+    FROM exchange_rates
+    WHERE code = #{code}
+  </select>
+
+  <select id="selectAll" resultMap="BaseResultMap">
+    SELECT code, rate_to_usd, updated_at
+    FROM exchange_rates
+    ORDER BY code
+  </select>
+
+  <insert id="upsert">
+    REPLACE INTO exchange_rates (code, rate_to_usd)
+    VALUES (#{code}, #{rateToUsd})
+  </insert>
+
+  <insert id="batchUpsert">
+    REPLACE INTO exchange_rates (code, rate_to_usd)
+    VALUES
+    <foreach collection="rates" item="r" separator=",">
+      (#{r.code}, #{r.rateToUsd})
+    </foreach>
+  </insert>
+
+</mapper>

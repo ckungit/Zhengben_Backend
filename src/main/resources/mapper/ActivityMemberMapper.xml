@@ -15,7 +15,7 @@
     </select>
 
     <select id="selectByActivityId" resultType="map">
-        SELECT m.user_id, u.nickname, u.avatar_url as avatarUrl, m.role, m.joined_at
+        SELECT m.user_id, u.nickname, u.avatar_url as avatarUrl, m.role, m.joined_at, u.primary_currency as primaryCurrency
         FROM activity_member m
         INNER JOIN user u ON m.user_id = u.id
         WHERE m.activity_id = #{activityId}
@@ -32,6 +32,15 @@
 
     <select id="countByActivityId" resultType="int">
         SELECT COUNT(*) FROM activity_member WHERE activity_id = #{activityId}
+    </select>
+
+    <!-- V51: Count outcomes related to a user in an activity -->
+    <select id="countUserOutcomes" resultType="int">
+        SELECT COUNT(DISTINCT o.id) FROM outcome o
+        LEFT JOIN outcome_participant p ON o.id = p.outcome_id
+        WHERE o.activity_id = #{activityId}
+          AND o.deleted_flag = 0
+          AND (o.payer_userid = #{userId} OR p.user_id = #{userId})
     </select>
 
     <!-- V40: GDPR - Delete all memberships for a user -->

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhangben.backend.mapper.ActivityEventMapper">
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO activity_event (activity_id, user_id, event_type, user_currency, extra_info)
+        VALUES (#{activityId}, #{userId}, #{eventType}, #{userCurrency}, #{extraInfo})
+    </insert>
+
+    <select id="selectByActivityId" resultType="map">
+        SELECT
+            e.id,
+            e.activity_id as activityId,
+            e.user_id as userId,
+            e.event_type as eventType,
+            e.user_currency as userCurrency,
+            e.extra_info as extraInfo,
+            e.created_at as createdAt,
+            u.nickname,
+            u.avatar_url as avatarUrl
+        FROM activity_event e
+        INNER JOIN user u ON e.user_id = u.id
+        WHERE e.activity_id = #{activityId}
+        ORDER BY e.created_at DESC
+    </select>
+
+</mapper>

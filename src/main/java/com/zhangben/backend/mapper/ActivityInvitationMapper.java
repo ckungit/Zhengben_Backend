@@ -55,6 +55,11 @@ public interface ActivityInvitationMapper {
     void deleteByActivity(Integer activityId);
 
     /**
+     * V51: Cancel a pending invitation (inviter cancels)
+     */
+    int cancelByInviter(@Param("id") Integer id, @Param("inviterId") Integer inviterId);
+
+    /**
      * V40: Delete all invitations involving a user (GDPR)
      */
     void deleteByUser(@Param("userId") Integer userId);

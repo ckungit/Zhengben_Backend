@@ -7,6 +7,8 @@ public class Activity {
     private String name;
     private String description;
     private String coverEmoji;
+    private String baseCurrency;
+    private Byte invitePolicy;
     private Integer creatorId;
     private Byte status;
     private Date settleTime;
@@ -24,7 +26,13 @@ public class Activity {
     
     public String getCoverEmoji() { return coverEmoji; }
     public void setCoverEmoji(String coverEmoji) { this.coverEmoji = coverEmoji; }
-    
+
+    public String getBaseCurrency() { return baseCurrency; }
+    public void setBaseCurrency(String baseCurrency) { this.baseCurrency = baseCurrency; }
+
+    public Byte getInvitePolicy() { return invitePolicy; }
+    public void setInvitePolicy(Byte invitePolicy) { this.invitePolicy = invitePolicy; }
+
     public Integer getCreatorId() { return creatorId; }
     public void setCreatorId(Integer creatorId) { this.creatorId = creatorId; }
     

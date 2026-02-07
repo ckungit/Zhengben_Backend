@@ -1,5 +1,6 @@
 package com.zhangben.backend.model;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 public class Outcome {
@@ -128,6 +129,16 @@ public class Outcome {
      * @mbg.generated Wed Jan 28 08:42:00 JST 2026
      */
     private byte[] locaton;
+
+    // V47: Multi-currency snapshot fields
+    private Long originalAmount;
+    private String originalCurrency;
+    private String targetCurrencySnapshot;
+    private BigDecimal exchangeRateSnapshot;
+    private Long convertedAmountSnapshot;
+
+    // V50: USD equivalent of per_amount (cents), immutable snapshot
+    private Long usdAmountSnapshot;
 
     /**
      * 总份额数
@@ -531,5 +542,56 @@ public class Outcome {
 
     public void setOnBehalfOf(Integer onBehalfOf) {
         this.onBehalfOf = onBehalfOf;
+    }
+
+    // V47: Multi-currency getters/setters
+
+    public Long getOriginalAmount() {
+        return originalAmount;
+    }
+
+    public void setOriginalAmount(Long originalAmount) {
+        this.originalAmount = originalAmount;
+    }
+
+    public String getOriginalCurrency() {
+        return originalCurrency;
+    }
+
+    public void setOriginalCurrency(String originalCurrency) {
+        this.originalCurrency = originalCurrency;
+    }
+
+    public String getTargetCurrencySnapshot() {
+        return targetCurrencySnapshot;
+    }
+
+    public void setTargetCurrencySnapshot(String targetCurrencySnapshot) {
+        this.targetCurrencySnapshot = targetCurrencySnapshot;
+    }
+
+    public BigDecimal getExchangeRateSnapshot() {
+        return exchangeRateSnapshot;
+    }
+
+    public void setExchangeRateSnapshot(BigDecimal exchangeRateSnapshot) {
+        this.exchangeRateSnapshot = exchangeRateSnapshot;
+    }
+
+    public Long getConvertedAmountSnapshot() {
+        return convertedAmountSnapshot;
+    }
+
+    public void setConvertedAmountSnapshot(Long convertedAmountSnapshot) {
+        this.convertedAmountSnapshot = convertedAmountSnapshot;
+    }
+
+    // V50: USD amount snapshot
+    public Long getUsdAmountSnapshot() {
+        return usdAmountSnapshot;
+    }
+
+    public void setUsdAmountSnapshot(Long usdAmountSnapshot) {
+        this.usdAmountSnapshot = usdAmountSnapshot;
     }
 }

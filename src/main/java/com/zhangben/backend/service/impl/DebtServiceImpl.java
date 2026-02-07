@@ -1,6 +1,8 @@
 package com.zhangben.backend.service.impl;
 
 import com.zhangben.backend.dto.*;
+import com.zhangben.backend.mapper.ActivityMapper;
+import com.zhangben.backend.mapper.ActivityMemberMapper;
 import com.zhangben.backend.mapper.FavoredUserMapper;
 import com.zhangben.backend.mapper.NotificationMapper;
 import com.zhangben.backend.mapper.OutcomeMapper;
@@ -46,6 +48,12 @@ public class DebtServiceImpl implements DebtService {
     @Autowired
     private UserPaymentMethodService userPaymentMethodService;
 
+    @Autowired
+    private ActivityMapper activityMapper;
+
+    @Autowired
+    private ActivityMemberMapper activityMemberMapper;
+
     /**
      * 使用 Example 查询所有未删除的 outcome
      */
@@ -53,6 +61,24 @@ public class DebtServiceImpl implements DebtService {
         OutcomeExample example = new OutcomeExample();
         example.createCriteria().andDeletedFlagEqualTo((byte) 0);
         return outcomeMapper.selectByExample(example);
+    }
+
+    /**
+     * V49: 加载一般模式的 outcome（排除活动账单）
+     */
+    private List<Outcome> loadGeneralOutcomes() {
+        return loadAllOutcomes().stream()
+            .filter(o -> o.getActivityId() == null || o.getActivityId() == 0)
+            .collect(Collectors.toList());
+    }
+
+    /**
+     * V49: 加载指定活动的 outcome
+     */
+    private List<Outcome> loadActivityOutcomes(Integer activityId) {
+        return loadAllOutcomes().stream()
+            .filter(o -> activityId.equals(o.getActivityId()))
+            .collect(Collectors.toList());
     }
 
     /**
@@ -66,12 +92,18 @@ public class DebtServiceImpl implements DebtService {
 
     /**
      * 构建 debtor-creditor 的原始欠款表（不含净额计算）
+     * V49: 使用一般模式 outcomes（排除活动账单）
      */
     private Map<String, Long> buildRawDebtMap() {
+        return buildRawDebtMapFrom(loadGeneralOutcomes());
+    }
+
+    /**
+     * V49: 从指定的 outcome 列表构建原始欠款表
+     */
+    private Map<String, Long> buildRawDebtMapFrom(List<Outcome> list) {
 
         Map<String, Long> map = new HashMap<>();
-
-        List<Outcome> list = loadAllOutcomes();
 
         for (Outcome o : list) {
 
@@ -122,53 +154,52 @@ public class DebtServiceImpl implements DebtService {
     }
 
     /**
-     * V19: 构建净额欠款表
+     * V49: 从指定 outcome 列表构建净额欠款表
+     */
+    private Map<String, Long> buildDebtMapFrom(List<Outcome> outcomes) {
+        Map<String, Long> rawMap = buildRawDebtMapFrom(outcomes);
+        return netFromRaw(rawMap);
+    }
+
+    /**
+     * V49: 从原始欠款表计算净额
+     */
+    private Map<String, Long> netFromRaw(Map<String, Long> rawMap) {
+        Map<String, Long> netMap = new HashMap<>();
+        Set<String> processed = new HashSet<>();
+
+        for (Map.Entry<String, Long> e : rawMap.entrySet()) {
+            String[] parts = e.getKey().split("-");
+            Integer userA = Integer.valueOf(parts[0]);
+            Integer userB = Integer.valueOf(parts[1]);
+
+            String pairKey = userA < userB ? userA + ":" + userB : userB + ":" + userA;
+            if (processed.contains(pairKey)) continue;
+            processed.add(pairKey);
+
+            String keyAB = userA + "-" + userB;
+            Long amountAB = rawMap.getOrDefault(keyAB, 0L);
+            String keyBA = userB + "-" + userA;
+            Long amountBA = rawMap.getOrDefault(keyBA, 0L);
+
+            long net = amountAB - amountBA;
+            if (net > 0) {
+                netMap.put(keyAB, net);
+            } else if (net < 0) {
+                netMap.put(keyBA, -net);
+            }
+        }
+        return netMap;
+    }
+
+    /**
+     * V19: 构建净额欠款表（一般模式，排除活动账单）
      * 当A欠B 300元，B欠A 200元时，计算净额：A欠B 100元
      */
     private Map<String, Long> buildDebtMap() {
 
         Map<String, Long> rawMap = buildRawDebtMap();
-        Map<String, Long> netMap = new HashMap<>();
-
-        // 记录已处理过的用户对
-        Set<String> processed = new HashSet<>();
-
-        for (Map.Entry<String, Long> e : rawMap.entrySet()) {
-
-            String[] parts = e.getKey().split("-");
-            Integer userA = Integer.valueOf(parts[0]);
-            Integer userB = Integer.valueOf(parts[1]);
-
-            // 创建规范化的用户对标识（小ID在前）
-            String pairKey = userA < userB ? userA + ":" + userB : userB + ":" + userA;
-
-            if (processed.contains(pairKey)) {
-                continue;
-            }
-            processed.add(pairKey);
-
-            // A欠B的金额
-            String keyAB = userA + "-" + userB;
-            Long amountAB = rawMap.getOrDefault(keyAB, 0L);
-
-            // B欠A的金额
-            String keyBA = userB + "-" + userA;
-            Long amountBA = rawMap.getOrDefault(keyBA, 0L);
-
-            // 计算净额
-            long net = amountAB - amountBA;
-
-            if (net > 0) {
-                // A欠B净额
-                netMap.put(keyAB, net);
-            } else if (net < 0) {
-                // B欠A净额
-                netMap.put(keyBA, -net);
-            }
-            // net == 0 表示两清，不记录
-        }
-
-        return netMap;
+        return netFromRaw(rawMap);
     }
 
     @Override
@@ -218,7 +249,7 @@ public class DebtServiceImpl implements DebtService {
         resp.setCreditorName(creditor.getNickname());
         resp.setTotalAmount(total);
 
-        List<Outcome> all = loadAllOutcomes();
+        List<Outcome> all = loadGeneralOutcomes();
         List<CreditorDebtDetailItem> details = new ArrayList<>();
         List<CreditorDebtDetailItem> offsetDetails = new ArrayList<>();
 
@@ -254,6 +285,9 @@ public class DebtServiceImpl implements DebtService {
                         item.setCategoryName("未分类");
                     }
                     item.setLocationText("位置信息");
+                    item.setCurrency(o.getTargetCurrencySnapshot());
+                    item.setOriginalAmount(o.getOriginalAmount());
+                    item.setOriginalCurrency(o.getOriginalCurrency());
 
                     details.add(item);
                 }
@@ -282,6 +316,9 @@ public class DebtServiceImpl implements DebtService {
                             item.setCategoryName("未分类");
                         }
                         item.setLocationText("无");
+                        item.setCurrency(o.getTargetCurrencySnapshot());
+                        item.setOriginalAmount(o.getOriginalAmount());
+                        item.setOriginalCurrency(o.getOriginalCurrency());
 
                         offsetDetails.add(item);
                     }
@@ -304,6 +341,9 @@ public class DebtServiceImpl implements DebtService {
                     item.setPayDatetime(o.getPayDatetime());
                     item.setCategoryName("还款");
                     item.setLocationText("无");
+                    item.setCurrency(o.getTargetCurrencySnapshot());
+                    item.setOriginalAmount(o.getOriginalAmount());
+                    item.setOriginalCurrency(o.getOriginalCurrency());
 
                     details.add(item);
                 }
@@ -321,6 +361,9 @@ public class DebtServiceImpl implements DebtService {
                         item.setCategoryName("还款");
                         item.setIsOffset(true);
                         item.setLocationText("无");
+                        item.setCurrency(o.getTargetCurrencySnapshot());
+                        item.setOriginalAmount(o.getOriginalAmount());
+                        item.setOriginalCurrency(o.getOriginalCurrency());
 
                         offsetDetails.add(item);
                     }
@@ -360,6 +403,11 @@ public class DebtServiceImpl implements DebtService {
         o.setStyleId(req.getStyleId() != null ? req.getStyleId() : 0);
         o.setComment(req.getComment());
         o.setDeletedFlag((byte) 0);
+
+        // V49: 活动还款时设置 activityId
+        if (req.getActivityId() != null) {
+            o.setActivityId(req.getActivityId());
+        }
 
         // V20: 支持自定义还款时间
         LocalDateTime payTime = req.getPayDatetime() != null ? req.getPayDatetime() : LocalDateTime.now();
@@ -461,7 +509,7 @@ public class DebtServiceImpl implements DebtService {
 
         List<MyCreditOverviewItem> list = new ArrayList<>();
 
-        List<Outcome> all = loadAllOutcomes();
+        List<Outcome> all = loadGeneralOutcomes();
 
         for (Map.Entry<Integer, Long> e : debtorMap.entrySet()) {
 
@@ -511,6 +559,9 @@ public class DebtServiceImpl implements DebtService {
                             d.setCategoryName("未分类");
                         }
                         d.setLocationText("位置信息");
+                        d.setCurrency(o.getTargetCurrencySnapshot());
+                        d.setOriginalAmount(o.getOriginalAmount());
+                        d.setOriginalCurrency(o.getOriginalCurrency());
 
                         details.add(d);
                     }
@@ -539,6 +590,9 @@ public class DebtServiceImpl implements DebtService {
                                 d.setCategoryName("未分类");
                             }
                             d.setLocationText("无");
+                            d.setCurrency(o.getTargetCurrencySnapshot());
+                            d.setOriginalAmount(o.getOriginalAmount());
+                            d.setOriginalCurrency(o.getOriginalCurrency());
 
                             offsetDetails.add(d);
                         }
@@ -561,6 +615,9 @@ public class DebtServiceImpl implements DebtService {
                         d.setPayDatetime(o.getPayDatetime());
                         d.setCategoryName("还款");
                         d.setLocationText("无");
+                        d.setCurrency(o.getTargetCurrencySnapshot());
+                        d.setOriginalAmount(o.getOriginalAmount());
+                        d.setOriginalCurrency(o.getOriginalCurrency());
 
                         details.add(d);
                     }
@@ -578,6 +635,9 @@ public class DebtServiceImpl implements DebtService {
                             d.setCategoryName("还款");
                             d.setIsOffset(true);
                             d.setLocationText("无");
+                            d.setCurrency(o.getTargetCurrencySnapshot());
+                            d.setOriginalAmount(o.getOriginalAmount());
+                            d.setOriginalCurrency(o.getOriginalCurrency());
 
                             offsetDetails.add(d);
                         }
@@ -623,7 +683,7 @@ public class DebtServiceImpl implements DebtService {
 
         List<MyDebtOverviewItem> list = new ArrayList<>();
 
-        List<Outcome> all = loadAllOutcomes();
+        List<Outcome> all = loadGeneralOutcomes();
 
         for (Map.Entry<Integer, Long> e : creditorMap.entrySet()) {
 
@@ -686,6 +746,9 @@ public class DebtServiceImpl implements DebtService {
                             d.setCategoryName("未分类");
                         }
                         d.setLocationText("位置信息");
+                        d.setCurrency(o.getTargetCurrencySnapshot());
+                        d.setOriginalAmount(o.getOriginalAmount());
+                        d.setOriginalCurrency(o.getOriginalCurrency());
 
                         details.add(d);
                     }
@@ -714,6 +777,9 @@ public class DebtServiceImpl implements DebtService {
                                 d.setCategoryName("未分类");
                             }
                             d.setLocationText("无");
+                            d.setCurrency(o.getTargetCurrencySnapshot());
+                            d.setOriginalAmount(o.getOriginalAmount());
+                            d.setOriginalCurrency(o.getOriginalCurrency());
 
                             offsetDetails.add(d);
                         }
@@ -760,6 +826,10 @@ public class DebtServiceImpl implements DebtService {
                             pendingAmount += o.getAmount();
                         }
 
+                        d.setCurrency(o.getTargetCurrencySnapshot());
+                        d.setOriginalAmount(o.getOriginalAmount());
+                        d.setOriginalCurrency(o.getOriginalCurrency());
+
                         details.add(d);
                     }
 
@@ -776,6 +846,9 @@ public class DebtServiceImpl implements DebtService {
                             d.setCategoryName("还款");
                             d.setIsOffset(true);
                             d.setLocationText("无");
+                            d.setCurrency(o.getTargetCurrencySnapshot());
+                            d.setOriginalAmount(o.getOriginalAmount());
+                            d.setOriginalCurrency(o.getOriginalCurrency());
 
                             offsetDetails.add(d);
                         }
@@ -1086,6 +1159,11 @@ public class DebtServiceImpl implements DebtService {
             o.setComment(req.getComment());
             o.setDeletedFlag((byte) 0);
             o.setPayDatetime(payTime);
+
+            // V49: 活动还款时设置 activityId
+            if (req.getActivityId() != null) {
+                o.setActivityId(req.getActivityId());
+            }
 
             // V35: 设置代还字段
             o.setRepaidBy(currentUserId);     // 实际付款人
@@ -1506,7 +1584,7 @@ public class DebtServiceImpl implements DebtService {
         }
 
         // 1. 加载所有未删除的 outcomes
-        List<Outcome> allOutcomes = loadAllOutcomes();
+        List<Outcome> allOutcomes = loadGeneralOutcomes();
 
         // 2. 筛选：creditor 付款、debtor 参与的消费 (repayFlag=1)，按 pay_datetime ASC
         List<long[]> expenses = new ArrayList<>(); // [outcomeId, shareAmount]
@@ -1661,5 +1739,76 @@ public class DebtServiceImpl implements DebtService {
         response.setRemainingDebt(remainingDebt);
         response.setTotalRepaidThisTime(newAmount);
         return response;
+    }
+
+    // ---- V49: Activity Debt Isolation ----
+
+    @Override
+    public List<Map<String, Object>> getActivityDebtsOverview(Integer userId) {
+        // Get all activities user belongs to
+        List<Activity> activities = activityMapper.selectByUserId(userId);
+        List<Map<String, Object>> result = new ArrayList<>();
+
+        for (Activity activity : activities) {
+            if (activity.getStatus() != null && activity.getStatus() == 2) {
+                // Skip settled activities (unless they have remaining debts)
+            }
+
+            List<Outcome> activityOutcomes = loadActivityOutcomes(activity.getId());
+            if (activityOutcomes.isEmpty()) continue;
+
+            Map<String, Long> debtMap = buildDebtMapFrom(activityOutcomes);
+
+            // Calculate this user's debts/credits within this activity
+            long shouldReceive = 0;
+            long shouldPay = 0;
+            List<Map<String, Object>> members = new ArrayList<>();
+
+            for (Map.Entry<String, Long> e : debtMap.entrySet()) {
+                String[] parts = e.getKey().split("-");
+                Integer debtor = Integer.valueOf(parts[0]);
+                Integer creditor = Integer.valueOf(parts[1]);
+                Long amount = e.getValue();
+
+                if (amount <= 0) continue;
+
+                if (creditor.equals(userId)) {
+                    shouldReceive += amount;
+                    User debtorUser = userMapper.selectByPrimaryKey(debtor);
+                    Map<String, Object> memberDebt = new HashMap<>();
+                    memberDebt.put("userId", debtor);
+                    memberDebt.put("nickname", debtorUser != null ? debtorUser.getNickname() : "");
+                    memberDebt.put("amount", amount);
+                    memberDebt.put("type", "owesMe");
+                    members.add(memberDebt);
+                }
+                if (debtor.equals(userId)) {
+                    shouldPay += amount;
+                    User creditorUser = userMapper.selectByPrimaryKey(creditor);
+                    Map<String, Object> memberDebt = new HashMap<>();
+                    memberDebt.put("userId", creditor);
+                    memberDebt.put("nickname", creditorUser != null ? creditorUser.getNickname() : "");
+                    memberDebt.put("amount", amount);
+                    memberDebt.put("type", "iOwe");
+                    members.add(memberDebt);
+                }
+            }
+
+            // Only include activities where user has active debts
+            if (shouldReceive == 0 && shouldPay == 0) continue;
+
+            Map<String, Object> activityDebt = new HashMap<>();
+            activityDebt.put("activityId", activity.getId());
+            activityDebt.put("activityName", activity.getName());
+            activityDebt.put("coverEmoji", activity.getCoverEmoji());
+            activityDebt.put("baseCurrency", activity.getBaseCurrency());
+            activityDebt.put("status", activity.getStatus());
+            activityDebt.put("shouldReceive", shouldReceive);
+            activityDebt.put("shouldPay", shouldPay);
+            activityDebt.put("members", members);
+            result.add(activityDebt);
+        }
+
+        return result;
     }
 }

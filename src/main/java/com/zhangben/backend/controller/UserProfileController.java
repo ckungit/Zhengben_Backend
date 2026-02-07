@@ -8,9 +8,11 @@ import com.google.api.client.json.gson.GsonFactory;
 import com.zhangben.backend.config.FeatureConfig;
 import com.zhangben.backend.dto.SubscriptionInfoResponse;
 import com.zhangben.backend.dto.UserProfileResponse;
-import com.zhangben.backend.model.User;
-import com.zhangben.backend.model.UserExample;
+import com.zhangben.backend.mapper.ExchangeRateMapper;
+import com.zhangben.backend.mapper.PredictionMapper;
+import com.zhangben.backend.model.*;
 import com.zhangben.backend.mapper.UserMapper;
+import com.zhangben.backend.service.PredictionEngine;
 import com.zhangben.backend.service.R2StorageService;
 import com.zhangben.backend.service.SubscriptionService;
 import com.zhangben.backend.service.UserProfileService;
@@ -21,7 +23,10 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.zhangben.backend.util.CurrencyUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
@@ -30,6 +35,8 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/user/profile")
 public class UserProfileController {
+
+    private static final Logger logger = LoggerFactory.getLogger(UserProfileController.class);
 
     @Autowired
     private UserProfileService userProfileService;
@@ -45,6 +52,15 @@ public class UserProfileController {
 
     @Autowired
     private FeatureConfig featureConfig;
+
+    @Autowired
+    private ExchangeRateMapper exchangeRateMapper;
+
+    @Autowired
+    private PredictionMapper predictionMapper;
+
+    @Autowired
+    private PredictionEngine predictionEngine;
 
     @Value("${avatar.max-file-size:51200}")
     private long maxFileSize;
@@ -152,19 +168,45 @@ public class UserProfileController {
             return ResponseEntity.badRequest().body("不支持的货币类型");
         }
 
+        // 获取旧币种
+        User currentUser = userMapper.selectByPrimaryKey(userId);
+        String oldCurrency = currentUser.getPrimaryCurrency() != null ? currentUser.getPrimaryCurrency() : "JPY";
+        String newCurrency = currency.toUpperCase();
+
         // 更新数据库
         User updateUser = new User();
         updateUser.setId(userId);
-        updateUser.setPrimaryCurrency(currency.toUpperCase());
+        updateUser.setPrimaryCurrency(newCurrency);
         updateUser.setUpdatedAt(LocalDateTime.now());
         userMapper.updateByPrimaryKeySelective(updateUser);
 
         // 同步更新 Session
-        CurrencyUtils.updateSessionCurrency(currency.toUpperCase());
+        CurrencyUtils.updateSessionCurrency(newCurrency);
+
+        // V49: Rescale Kalman filter state if currency changed
+        if (!oldCurrency.equalsIgnoreCase(newCurrency)) {
+            try {
+                ExchangeRate oldRate = exchangeRateMapper.selectByCode(oldCurrency);
+                ExchangeRate newRate = exchangeRateMapper.selectByCode(newCurrency);
+                if (oldRate != null && newRate != null
+                        && oldRate.getRateToUsd() != null && newRate.getRateToUsd() != null
+                        && oldRate.getRateToUsd().compareTo(BigDecimal.ZERO) > 0) {
+                    double ratio = newRate.getRateToUsd().doubleValue() / oldRate.getRateToUsd().doubleValue();
+                    KalmanFilterState state = predictionMapper.selectByUserId(userId);
+                    if (state != null) {
+                        predictionEngine.rescaleModel(state, ratio);
+                        predictionMapper.updateByUserId(state);
+                        logger.info("Rescaled Kalman model for user {} ({}→{}, ratio={})", userId, oldCurrency, newCurrency, ratio);
+                    }
+                }
+            } catch (Exception e) {
+                logger.warn("Failed to rescale Kalman model for user {}: {}", userId, e.getMessage());
+            }
+        }
 
         return ResponseEntity.ok(Map.of(
             "message", "货币设置已更新",
-            "currency", currency.toUpperCase()
+            "currency", newCurrency
         ));
     }
 
